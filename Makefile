@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 
 BUILD_DIR ?= build
-JOBS ?= 2
+JOBS ?= $(shell nproc)
 THREADS ?= 4
 MATRIX_SIZE ?= 4
 CUDA_ARCH ?= 120
