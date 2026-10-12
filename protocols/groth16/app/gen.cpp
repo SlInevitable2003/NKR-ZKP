@@ -104,11 +104,6 @@ int main(int argc, char *argv[]) {
         if (argc < 3) usage(argv[0]);
         const size_t s = (size_t)atoi(argv[2]);
         if (s == 0) usage(argv[0]);
-        if (s > 16 && std::getenv("NKR_ZKP_ALLOW_LARGE") == nullptr) {
-            cerr << "Refusing matrix size " << s
-                 << "; set NKR_ZKP_ALLOW_LARGE=1 only after checking RAM/VRAM budgets.\n";
-            return 75;
-        }
         build_matmul(mgr, assignment, s);
         stem = "matmul_" + to_string(s);
     } else {

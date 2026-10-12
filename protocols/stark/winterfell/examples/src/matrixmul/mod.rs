@@ -67,18 +67,30 @@ impl<H: ElementHasher> MatrixMulExample<H> {
         assert!(matrix_size.is_power_of_two(), "matrix size must be a power of 2");
         assert!(matrix_size >= 2, "matrix size must be at least 2");
 
-        // build two input matrices and compute their product
-        let now = Instant::now();
+        let input_start = Instant::now();
         let a = build_matrix(matrix_size);
         let b = build_matrix(matrix_size);
-        let c = multiply(&a, &b, matrix_size);
         println!(
-            "Computed {0}x{0} matrix multiplication in {1} ms",
-            matrix_size,
-            now.elapsed().as_millis()
+            "MatrixMul timing: input generation = {:.3} ms",
+            input_start.elapsed().as_secs_f64() * 1000.0
         );
 
-        Self { options, matrix_size, a, b, c, _hasher: PhantomData }
+        let multiply_start = Instant::now();
+        let c = multiply(&a, &b, matrix_size);
+        println!(
+            "MatrixMul timing: {0}x{0} multiplication = {1:.3} ms",
+            matrix_size,
+            multiply_start.elapsed().as_secs_f64() * 1000.0
+        );
+
+        Self {
+            options,
+            matrix_size,
+            a,
+            b,
+            c,
+            _hasher: PhantomData,
+        }
     }
 }
 
@@ -99,20 +111,31 @@ where
         let prover = MatrixMulProver::<H>::new(self.options.clone());
 
         // generate execution trace
+        let trace_start = Instant::now();
         let trace =
             info_span!("generate_execution_trace", num_cols = TRACE_WIDTH, steps = field::Empty)
                 .in_scope(|| {
-                    let trace =
-                        prover.build_trace(&self.a, &self.b, &self.c, self.matrix_size);
+                    let trace = prover.build_trace(&self.a, &self.b, &self.c, self.matrix_size);
                     tracing::Span::current().record("steps", trace.length());
                     trace
                 });
+        println!(
+            "MatrixMul timing: trace construction = {:.3} ms ({} steps)",
+            trace_start.elapsed().as_secs_f64() * 1000.0,
+            trace.length()
+        );
 
-        // generate the proof
-        prover.prove(trace).unwrap()
+        let proof_start = Instant::now();
+        let proof = prover.prove(trace).unwrap();
+        println!(
+            "MatrixMul timing: proof generation (excluding trace) = {:.3} ms",
+            proof_start.elapsed().as_secs_f64() * 1000.0
+        );
+        proof
     }
 
     fn verify(&self, proof: Proof) -> Result<(), VerifierError> {
+        let verify_start = Instant::now();
         let pub_inputs = PublicInputs {
             a: self.a.clone(),
             b: self.b.clone(),
@@ -120,11 +143,16 @@ where
         };
         let acceptable_options =
             winterfell::AcceptableOptions::OptionSet(vec![proof.options().clone()]);
-        winterfell::verify::<MatrixMulAir, H, DefaultRandomCoin<H>, MerkleTree<H>>(
+        let result = winterfell::verify::<MatrixMulAir, H, DefaultRandomCoin<H>, MerkleTree<H>>(
             proof,
             pub_inputs,
             &acceptable_options,
-        )
+        );
+        println!(
+            "MatrixMul timing: verification = {:.3} ms",
+            verify_start.elapsed().as_secs_f64() * 1000.0
+        );
+        result
     }
 
     fn verify_with_wrong_inputs(&self, proof: Proof) -> Result<(), VerifierError> {

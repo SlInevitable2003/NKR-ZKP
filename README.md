@@ -16,15 +16,15 @@ make check
 
 # Winterfell 多线程构建/矩阵乘法；线程数可覆盖
 make stark THREADS=8
-make stark-matmul THREADS=4 MATRIX_SIZE=4 MEMORY_MIB=4096 TIMEOUT=300
+make stark-matmul THREADS=4 MATRIX_SIZE=4
 
 # PLONK CPU
 make plonk-cpu
-make plonk-test MEMORY_MIB=4096 TIMEOUT=300
+make plonk-test
 
 # Groth16：同一套协议应用通过 --backend 选择 CPU/CUDA/DCU
 make groth16-test-cpu
-make groth16-test-cuda CUDA_ARCH=120
+make groth16-test-cuda CUDA_ARCH=<arch>
 make groth16-dcu
 ```
 
@@ -34,13 +34,8 @@ Groth16 所需的 `libsnark`、`libff`、`libfqfft`、CGBN 等依赖保存在
 PLONK GPU 构建仍分别需要相应厂商工具链。本仓库不会提交构建缓存或生成的
 kernel 二进制。
 
-矩阵测试默认拒绝大于 16 的维度。Groth16 CUDA 默认使用 n=12，因为导入的
-NTT 优化内核面向大域，而框架为小域提供了安全的 radix-2 路径。GPU 命令使用
-`MEMORY_MIB=0` 跳过会破坏 CUDA 虚拟地址预留的 `ulimit -v`，但仍有输入规模、
-超时、启动前主存余量以及至少保留 512 MiB 空闲显存四层保护。
-
-只有在确认内存和显存预算后才应显式设置
-`NKR_ZKP_ALLOW_LARGE=1`；这只是解除保护，不代表规模一定安全。
+Groth16 CUDA 默认测试规模为 n=12。矩阵维度可以通过相应目标的 size 变量
+调整；较大的电路会相应增加内存、显存和运行时间。
 
 ## 各项目怎么运行
 
@@ -54,10 +49,10 @@ setup、prove，最后用平台无关的 verifier 验证证明：
 
 ```bash
 # CPU：默认 n=4
-make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=4 MEMORY_MIB=4096 TIMEOUT=120
+make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=4
 
 # NVIDIA GPU：CUDA_ARCH 按目标设备设置
-make groth16-test-cuda GROTH16_CUDA_MATRIX_SIZE=12 CUDA_ARCH=<arch> TIMEOUT=120
+make groth16-test-cuda GROTH16_CUDA_MATRIX_SIZE=12 CUDA_ARCH=<arch>
 ```
 
 也可以在构建后手工执行四个阶段。下面以 CPU 和 `n=4` 为例：
@@ -79,9 +74,7 @@ G16=build/groth16-cpu/protocols/groth16
 - `*.proof.bin`：最终证明。
 
 CUDA 的手工用法相同，只需使用 `build/groth16-cuda` 并把 setup/prove 的
-`--backend` 改为 `cuda`。GPU 进程应通过
-`scripts/run-with-limits.sh --memory-mib 0 --timeout 120 -- ...` 启动；CUDA
-驱动会预留很大的虚拟地址空间，因此不能用 `ulimit -v` 限制它。
+`--backend` 改为 `cuda`。
 
 DCU 需要安装可用的 HIP/ROCm 工具链和 DCU 设备。构建后将目录换成
 `build/groth16-dcu`，并用 `--backend dcu` 执行 setup/prove；gen 和 verify
@@ -102,12 +95,12 @@ G16=build/groth16-dcu/protocols/groth16
 Rayon 工作线程数：
 
 ```bash
-make stark-matmul THREADS=4 MATRIX_SIZE=4 MEMORY_MIB=4096 TIMEOUT=300
+make stark-matmul THREADS=4 MATRIX_SIZE=4
 ```
 
-`MATRIX_SIZE` 必须是至少为 2 的 2 次幂。顶层命令默认将测试规模限制为 16。
-程序会在终端输出 trace/proof 耗时、证明大小、安全级别和验证结果，不会把
-证明持久化为文件。
+`MATRIX_SIZE` 必须是至少为 2 的 2 次幂。程序会在终端输出矩阵计算、trace
+构造、证明生成和验证的分阶段耗时，以及证明大小和安全级别；证明不会默认
+持久化为文件。
 
 同一个 runner 还包含 Fibonacci、Rescue、Merkle 等例子，例如：
 
@@ -125,20 +118,19 @@ protocols/stark/winterfell/target/release/winterfell --help
 生成证明和验证：
 
 ```bash
-make plonk-test MEMORY_MIB=4096 TIMEOUT=300
+make plonk-test
 ```
 
 也可以直接选择其他 example：
 
 ```bash
-scripts/run-with-limits.sh --memory-mib 4096 --timeout 300 -- \
-  cargo run --release \
+cargo run --release \
   --manifest-path protocols/plonk/implementations/cpu/Cargo.toml \
   --example example_poly
 ```
 
-CPU 快照中的 `matmul` example 仍使用源码内固定的矩阵和 CRS 规模，尚未接入
-顶层资源保护，因此这里以 `simple_circuit` 作为标准运行入口。
+CPU 快照中的 `matmul` example 仍使用源码内固定的矩阵和 CRS 规模，尚未
+参数化，因此这里以 `simple_circuit` 作为标准运行入口。
 
 ### PLONK NVIDIA CUDA
 
@@ -146,19 +138,16 @@ CPU 快照中的 `matmul` example 仍使用源码内固定的矩阵和 CRS 规�
 MSM context、生成证明并在 CPU 上验证：
 
 ```bash
-make plonk-test-cuda CUDA_HOME=<cuda-toolkit-path> TIMEOUT=300
+make plonk-test-cuda CUDA_HOME=<cuda-toolkit-path>
 ```
 
-CUDA 快照的 `matmul` example 同样使用源码内固定的规模，尚未接入顶层资源
-保护。PLONK CPU/CUDA 仍是两个独立快照；它们尚未提供跨后端共用的文件格式
-或统一 CLI。
+CUDA 快照的 `matmul` example 同样使用源码内固定的规模，尚未参数化。PLONK
+CPU/CUDA 仍是两个独立快照；它们尚未提供跨后端共用的文件格式或统一 CLI。
 
-### 常用资源参数
+### 常用参数
 
 - `JOBS`：编译并发数，默认 2；
 - `THREADS`：Winterfell/Rayon 线程数，默认 4；
-- `MEMORY_MIB`：CPU 进程虚拟内存上限，默认 4096 MiB；
-- `TIMEOUT`：单个受保护命令的最长秒数，默认 300；
 - `CUDA_ARCH`：目标 GPU 的 CUDA compute capability；
 - `BUILD_DIR`：构建根目录，默认 `build/`。
 
