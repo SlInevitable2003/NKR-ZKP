@@ -54,7 +54,7 @@ option(
 option(
   WITH_SUPERCOP
   "Support for Ed25519 signatures required by ADSNARK"
-  ON
+  OFF
 )
 
 option(
@@ -79,6 +79,12 @@ option(
   USE_ASM
   "Use architecture-specific optimized assembly code"
   ON
+)
+
+option(
+  NKR_ZKP_BUILD_LIBSNARK_AUXILIARY
+  "Build vendored libsnark demos, profiles, and upstream tests"
+  OFF
 )
 
 set(
@@ -150,9 +156,11 @@ else()
   )
 endif()
 
-# Enable Boost for program_options
-FIND_PACKAGE( Boost 1.40 COMPONENTS program_options REQUIRED )
-INCLUDE_DIRECTORIES( ${Boost_INCLUDE_DIR} )
+if("${NKR_ZKP_BUILD_LIBSNARK_AUXILIARY}")
+  # Only the omitted command-line demos use Boost program_options.
+  FIND_PACKAGE( Boost 1.40 COMPONENTS program_options REQUIRED )
+  INCLUDE_DIRECTORIES( ${Boost_INCLUDE_DIR} )
+endif()
 
 add_definitions(
   -DCURVE_${CURVE}

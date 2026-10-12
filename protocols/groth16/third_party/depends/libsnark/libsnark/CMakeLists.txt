@@ -109,6 +109,7 @@ if("${WITH_SUPERCOP}")
   )
 endif()
 
+if("${NKR_ZKP_BUILD_LIBSNARK_AUXILIARY}")
 # Demos
 add_executable(
   demo_arithmetization
@@ -817,3 +818,4 @@ add_dependencies(check test_sha256_gadget)
 # add_dependencies(check zk_proof_systems_r1cs_mp_ppzkpcd_test)
 # add_dependencies(check zk_proof_systems_r1cs_sp_ppzkpcd_test)
 # add_dependencies(check zk_proof_systems_ram_zksnark_test)
+endif()
