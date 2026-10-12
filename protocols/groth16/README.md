@@ -2,13 +2,14 @@
 
 `common/` 保存平台无关的数据结构；`backends/cuda` 与 `backends/dcu` 分别保存 NVIDIA CUDA 和 HIP/DCU 实现。
 
-两个后端目前都依赖 lightZK 原有的 `depends` 树。配置时传入：
+依赖源码已经 vendored 到 `third_party/depends`，不需要原来的 `~/lightZK`。
+从仓库根目录运行完整 CPU/CUDA 流程：
 
 ```bash
-cmake -S ../../.. -B build \
-  -DNKR_ZKP_GROTH16_BACKEND=CUDA \
-  -DNKR_ZKP_GROTH16_DEPS_DIR=/path/to/lightZK/depends
+make groth16-test-cpu
+make groth16-test-cuda CUDA_ARCH=120
 ```
 
-DCU 时将 `CUDA` 换成 `DCU`。依赖必须包含 `libsnark/`；CUDA 测试还会使用 `cgbn/`。
-
+应用层固定为 `groth16-gen`、`groth16-setup`、`groth16-prove` 和
+`groth16-verify`；setup/prove 通过 `--backend cpu|cuda|dcu` 选择后端。
+完整的手工命令、产物说明及资源限制见仓库根目录的 `README.md`。

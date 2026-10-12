@@ -12,7 +12,7 @@ GROTH16_CPU_MATRIX_SIZE ?= 4
 GROTH16_CUDA_MATRIX_SIZE ?= 12
 GROTH16_DEPS_DIR ?= $(CURDIR)/protocols/groth16/third_party/depends
 
-.PHONY: help check groth16-cpu groth16-cuda groth16-dcu groth16-test-cpu groth16-test-cuda plonk-cpu plonk-test plonk-cuda stark stark-matmul clean
+.PHONY: help check groth16-cpu groth16-cuda groth16-dcu groth16-test-cpu groth16-test-cuda plonk-cpu plonk-test plonk-cuda plonk-test-cuda stark stark-matmul clean
 
 help:
 	@echo "NKR-ZKP targets:"
@@ -25,6 +25,7 @@ help:
 	@echo "  plonk-cpu      build the CPU PLONK snapshot"
 	@echo "  plonk-test     run a small PLONK CPU proof under resource limits"
 	@echo "  plonk-cuda     build the experimental CUDA PLONK snapshot"
+	@echo "  plonk-test-cuda  run the small PLONK CUDA proof example"
 	@echo "  stark          build Winterfell with concurrent CPU support"
 	@echo "  stark-matmul   run the Winterfell matrix multiplication example"
 
@@ -83,9 +84,18 @@ plonk-test:
 		--example simple_circuit
 
 plonk-cuda:
-	PATH="$(CUDA_HOME)/bin:$$PATH" ./scripts/run-with-limits.sh \
+	PATH="$(CUDA_HOME)/bin:$$PATH" \
+	LD_LIBRARY_PATH="$(CUDA_HOME)/lib64:$(CUDA_HOME)/targets/x86_64-linux/lib:$${LD_LIBRARY_PATH:-}" \
+	./scripts/run-with-limits.sh \
 		--memory-mib $(MEMORY_MIB) --timeout $(TIMEOUT) -- cargo build --release \
 		--manifest-path protocols/plonk/implementations/cuda/Cargo.toml
+
+plonk-test-cuda: plonk-cuda
+	PATH="$(CUDA_HOME)/bin:$$PATH" \
+	LD_LIBRARY_PATH="$(CUDA_HOME)/lib64:$(CUDA_HOME)/targets/x86_64-linux/lib:$${LD_LIBRARY_PATH:-}" \
+	./scripts/run-with-limits.sh --memory-mib 0 --timeout $(TIMEOUT) -- \
+		cargo run --release --manifest-path protocols/plonk/implementations/cuda/Cargo.toml \
+		--example simple_circuit
 
 stark:
 	RAYON_NUM_THREADS=$(THREADS) cargo build --release \
