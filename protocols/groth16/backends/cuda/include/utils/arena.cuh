@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <stdexcept>
+#include <string>
 #include <vector>
 #include <cuda_runtime.h>
 
@@ -50,8 +51,16 @@ public:
             total_size += r.size;
         }
 
-        cudaError_t err = cudaMalloc(&base_ptr, total_size);
-        if (err != cudaSuccess) throw std::runtime_error("cudaMalloc failed");
+        size_t free_bytes = 0, total_bytes = 0;
+        cudaError_t err = cudaMemGetInfo(&free_bytes, &total_bytes);
+        if (err != cudaSuccess)
+            throw std::runtime_error(std::string("cudaMemGetInfo failed: ") + cudaGetErrorString(err));
+        const size_t reserve = 512ULL << 20;
+        if (free_bytes <= reserve || total_size > free_bytes - reserve)
+            throw std::runtime_error("refusing CUDA allocation: less than 512 MiB would remain free");
+        err = cudaMalloc(&base_ptr, total_size);
+        if (err != cudaSuccess)
+            throw std::runtime_error(std::string("cudaMalloc failed: ") + cudaGetErrorString(err));
 
         char* ptr = reinterpret_cast<char*>(base_ptr);
         size_t offset = 0;

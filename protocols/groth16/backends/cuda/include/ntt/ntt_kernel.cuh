@@ -5,6 +5,29 @@
 #define NTT_BLK_SIZ 1024
 
 template <typename FieldT>
+__global__ void bit_reverse_copy(const FieldT *in, FieldT *out, uint32_t round, size_t scale)
+{
+    const size_t i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i < scale) out[bit_rev(i, round)] = in[i];
+}
+
+template <typename FieldT>
+__global__ void radix2_ntt_stage(const FieldT *in, FieldT *out, const FieldT *omegas,
+                                 size_t scale, size_t span)
+{
+    const size_t i = threadIdx.x + blockIdx.x * blockDim.x;
+    if (i >= scale / 2) return;
+    const size_t half = span / 2;
+    const size_t group = i / half;
+    const size_t offset = i % half;
+    const size_t left = group * span + offset;
+    const FieldT u = in[left];
+    const FieldT v = in[left + half] * omegas[offset * (scale / span)];
+    out[left] = u + v;
+    out[left + half] = u - v;
+}
+
+template <typename FieldT>
 __global__ void onchip_butterfly_transformation_1(FieldT *in, FieldT *out, FieldT *omegas, size_t scale)
 {
     uint32_t round = 0;

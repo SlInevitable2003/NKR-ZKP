@@ -8,6 +8,7 @@
 
 // #include <cooperative_groups.h>
 #include <hip/hip_cooperative_groups.h>
+#include "r1cs/spmat.hpp"
 #include "utils.hip"
 
 template <typename T>
@@ -26,38 +27,6 @@ __global__ void sparse_matrix_vector_multiplication(size_t rows, const uint32_t 
     y[row] = sum;
 }
 
-template <typename T>
-struct SparseMatrix {
-    std::vector<size_t> row_ptr, col_idx;
-    std::vector<T> values;
-
-    void randomize(size_t rows, size_t cols) {
-        row_ptr.resize(rows + 1);
-        col_idx.resize(rows * 2);
-        values.resize(rows * 2);
-
-        std::random_device rd;
-        std::mt19937_64 rng(rd());
-        std::uniform_int_distribution<size_t> dist(0, cols - 1);
-
-        #pragma omp parallel for
-        for (size_t r = 0; r < rows; r++) {
-            size_t c1 = dist(rng);
-            size_t c2 = dist(rng);
-            while (c2 == c1) c2 = dist(rng);
-
-            col_idx[r * 2] = c1;
-            col_idx[r * 2 + 1] = c2;
-
-            values[r * 2] = T::random_element();
-            values[r * 2 + 1] = T::random_element();
-        }
-
-        row_ptr[0] = 0;
-        for (size_t r = 0; r < rows; r++) row_ptr[r + 1] = row_ptr[r] + 2;
-    }
-};
-
 template <typename FieldT, typename HostFT, size_t instances = 1>
 class spMVMContext {
     size_t rows, cols;
@@ -66,7 +35,7 @@ class spMVMContext {
     TypedGpuArena arena;
     
 public:
-    spMVMContext(size_t rows_, size_t cols_, SparseMatrix<HostFT> **mats) : rows(rows_), cols(cols_) 
+    spMVMContext(size_t rows_, size_t cols_, CsrMatrix<HostFT> **mats) : rows(rows_), cols(cols_)
     {
         for (size_t i = 0; i < instances; i++) {
             arena.register_alloc(row_ptr[i], mats[i]->row_ptr.size());

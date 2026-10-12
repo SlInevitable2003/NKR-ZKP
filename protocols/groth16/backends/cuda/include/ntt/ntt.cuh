@@ -80,6 +80,31 @@ public:
 
         // uint32_t round, adjoint_bit;
         FieldT *omegas = inverse ? imega_power_table : omega_power_table;
+        if (scale < size_t(1) << 20) {
+            constexpr size_t block = 256;
+            const uint32_t rounds = log2_floor(scale);
+            bit_reverse_copy<<<ceil_div(scale, block), block>>>(poly, buffer, rounds, scale);
+            FieldT *source = buffer;
+            FieldT *destination = poly;
+            for (size_t span = 2; span <= scale; span <<= 1) {
+                radix2_ntt_stage<<<ceil_div(scale / 2, block), block>>>(
+                    source, destination, omegas, scale, span);
+                FieldT *temporary = source;
+                source = destination;
+                destination = temporary;
+            }
+            if (source != poly)
+                CUDA_CHECK(cudaMemcpy(poly, source, scale * sizeof(FieldT), cudaMemcpyDeviceToDevice));
+            if (inverse) {
+                kernel<<<ceil_div(scale, block), block>>>([=] __device__ (FieldT *values, FieldT *factor, size_t count) {
+                    const size_t i = threadIdx.x + blockIdx.x * blockDim.x;
+                    if (i < count) values[i] *= factor[0];
+                }, poly, scale_inverse, scale);
+            }
+            CUDA_CHECK(cudaDeviceSynchronize());
+            CUDA_CHECK(cudaGetLastError());
+            return;
+        }
         // for (round = 0, adjoint_bit = scale / 2; adjoint_bit > 0; round ++, adjoint_bit >>= 1)
         //     kernel<<<scale / 2048, 1024>>>(butterfly_transformation, poly, omegas, round, adjoint_bit);
 

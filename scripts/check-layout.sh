@@ -6,6 +6,8 @@ cd "$root_dir"
 
 required=(
   protocols/groth16/common
+  protocols/groth16/app
+  protocols/groth16/backends/cpu
   protocols/groth16/backends/cuda
   protocols/groth16/backends/dcu
   protocols/plonk/implementations/cpu/Cargo.toml

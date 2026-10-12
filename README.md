@@ -16,25 +16,36 @@ make check
 
 # Winterfell 多线程构建/矩阵乘法；线程数可覆盖
 make stark THREADS=8
-make stark-matmul THREADS=8 MATRIX_SIZE=8
+make stark-matmul THREADS=4 MATRIX_SIZE=4 MEMORY_MIB=4096 TIMEOUT=300
 
 # PLONK CPU
 make plonk-cpu
+make plonk-test MEMORY_MIB=4096 TIMEOUT=300
 
-# Groth16 需要指出 lightZK 的 depends 目录
-make groth16-cuda GROTH16_DEPS_DIR=/path/to/lightZK/depends
+# Groth16：同一套协议应用通过 --backend 选择 CPU/CUDA/DCU
+make groth16-test-cpu  GROTH16_DEPS_DIR=/path/to/lightZK/depends
+make groth16-test-cuda GROTH16_DEPS_DIR=/path/to/lightZK/depends CUDA_ARCH=120
 make groth16-dcu  GROTH16_DEPS_DIR=/path/to/lightZK/depends
 ```
 
 CUDA、HIP/DCU 和 PLONK GPU 构建分别需要相应厂商工具链。本仓库不会提交构建缓存或生成的 kernel 二进制。
+
+矩阵测试默认拒绝大于 16 的维度。Groth16 CUDA 默认使用 n=12，因为导入的
+NTT 优化内核面向大域，而框架为小域提供了安全的 radix-2 路径。GPU 命令使用
+`MEMORY_MIB=0` 跳过会破坏 CUDA 虚拟地址预留的 `ulimit -v`，但仍有输入规模、
+超时、启动前主存余量以及至少保留 512 MiB 空闲显存四层保护。
+
+只有在确认内存和显存预算后才应显式设置
+`NKR_ZKP_ALLOW_LARGE=1`；这只是解除保护，不代表规模一定安全。
 
 ## 目录
 
 ```text
 protocols/
   groth16/
-    common/                  平台无关头文件
-    backends/{cuda,dcu}/     平台实现
+    app/                     平台无关的 gen/setup/prove/verify CLI
+    common/                  协议类型、验证、I/O 与后端接口
+    backends/{cpu,cuda,dcu}/ 平台实现
   plonk/implementations/
     cpu/                     CPU 基线快照
     cuda/                    CUDA 实验快照
