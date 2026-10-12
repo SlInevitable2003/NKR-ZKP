@@ -10,6 +10,8 @@ required=(
   protocols/groth16/backends/cpu
   protocols/groth16/backends/cuda
   protocols/groth16/backends/dcu
+  protocols/groth16/third_party/depends/libsnark/CMakeLists.txt
+  protocols/groth16/third_party/depends/cgbn/cgbn.h
   protocols/plonk/implementations/cpu/Cargo.toml
   protocols/plonk/implementations/cuda/Cargo.toml
   protocols/stark/winterfell/Cargo.toml
@@ -24,6 +26,11 @@ done
 
 if find protocols -type d -name .git -print -quit | grep -q .; then
   echo "nested Git directory found under protocols/" >&2
+  exit 1
+fi
+
+if find protocols -name .gitmodules -o -name .git | grep -q .; then
+  echo "nested Git metadata found under protocols/" >&2
   exit 1
 fi
 

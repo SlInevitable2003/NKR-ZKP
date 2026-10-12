@@ -10,6 +10,7 @@ CUDA_ARCH ?= 120
 CUDA_HOME ?= /usr/local/cuda-12.9
 GROTH16_CPU_MATRIX_SIZE ?= 4
 GROTH16_CUDA_MATRIX_SIZE ?= 12
+GROTH16_DEPS_DIR ?= $(CURDIR)/protocols/groth16/third_party/depends
 
 .PHONY: help check groth16-cpu groth16-cuda groth16-dcu groth16-test-cpu groth16-test-cuda plonk-cpu plonk-test plonk-cuda stark stark-matmul clean
 

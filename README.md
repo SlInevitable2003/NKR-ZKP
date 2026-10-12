@@ -23,12 +23,16 @@ make plonk-cpu
 make plonk-test MEMORY_MIB=4096 TIMEOUT=300
 
 # Groth16：同一套协议应用通过 --backend 选择 CPU/CUDA/DCU
-make groth16-test-cpu  GROTH16_DEPS_DIR=/path/to/lightZK/depends
-make groth16-test-cuda GROTH16_DEPS_DIR=/path/to/lightZK/depends CUDA_ARCH=120
-make groth16-dcu  GROTH16_DEPS_DIR=/path/to/lightZK/depends
+make groth16-test-cpu
+make groth16-test-cuda CUDA_ARCH=120
+make groth16-dcu
 ```
 
-CUDA、HIP/DCU 和 PLONK GPU 构建分别需要相应厂商工具链。本仓库不会提交构建缓存或生成的 kernel 二进制。
+Groth16 所需的 `libsnark`、`libff`、`libfqfft`、CGBN 等依赖保存在
+`protocols/groth16/third_party/depends`。这是包含本项目多线程随机数修改的源码快照，
+不是 Git submodule；构建不再依赖原来的 `~/lightZK` 目录。CUDA、HIP/DCU 和
+PLONK GPU 构建仍分别需要相应厂商工具链。本仓库不会提交构建缓存或生成的
+kernel 二进制。
 
 矩阵测试默认拒绝大于 16 的维度。Groth16 CUDA 默认使用 n=12，因为导入的
 NTT 优化内核面向大域，而框架为小域提供了安全的 radix-2 路径。GPU 命令使用
@@ -46,6 +50,7 @@ protocols/
     app/                     平台无关的 gen/setup/prove/verify CLI
     common/                  协议类型、验证、I/O 与后端接口
     backends/{cpu,cuda,dcu}/ 平台实现
+    third_party/depends/     定制 libsnark 依赖源码快照
   plonk/implementations/
     cpu/                     CPU 基线快照
     cuda/                    CUDA 实验快照

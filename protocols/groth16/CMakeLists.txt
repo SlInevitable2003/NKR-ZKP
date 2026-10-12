@@ -1,7 +1,7 @@
-set(NKR_ZKP_GROTH16_DEPS_DIR "" CACHE PATH
-    "Path to the lightZK depends directory containing libsnark and cgbn")
+set(NKR_ZKP_GROTH16_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/depends" CACHE PATH
+    "Path to the vendored lightZK depends directory containing libsnark and cgbn")
 if(NOT IS_DIRECTORY "${NKR_ZKP_GROTH16_DEPS_DIR}/libsnark")
-    message(FATAL_ERROR "Set NKR_ZKP_GROTH16_DEPS_DIR to a lightZK depends directory")
+    message(FATAL_ERROR "Groth16 dependencies not found at ${NKR_ZKP_GROTH16_DEPS_DIR}")
 endif()
 
 set(NKR_ZKP_GROTH16_DATA_DIR "${CMAKE_CURRENT_BINARY_DIR}/data" CACHE PATH
