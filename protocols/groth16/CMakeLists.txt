@@ -8,6 +8,18 @@ set(NKR_ZKP_GROTH16_DATA_DIR "${CMAKE_CURRENT_BINARY_DIR}/data" CACHE PATH
     "Directory for Groth16 test artifacts")
 option(NKR_ZKP_GROTH16_BUILD_LEGACY_TESTS "Build imported backend microbenchmarks" OFF)
 
+# libff's optimized assembly is specific to x86-64. Seed its existing
+# USE_ASM option according to the target architecture while preserving an
+# explicit value supplied by the caller.
+if(NOT DEFINED USE_ASM)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+        set(USE_ASM ON CACHE BOOL "Use libff architecture-specific assembly")
+    else()
+        set(USE_ASM OFF CACHE BOOL "Use libff architecture-specific assembly")
+    endif()
+endif()
+message(STATUS "libff architecture-specific assembly: ${USE_ASM} (${CMAKE_SYSTEM_PROCESSOR})")
+
 # The vendored dependency snapshot is deliberately limited to the framework's
 # ALT_BN128 production path. Force these values so pre-cleanup CMake caches
 # cannot re-enable source trees that are no longer shipped.

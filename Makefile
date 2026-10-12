@@ -10,7 +10,7 @@ GROTH16_CPU_MATRIX_SIZE ?= 4
 GROTH16_CUDA_MATRIX_SIZE ?= 12
 GROTH16_DEPS_DIR ?= $(CURDIR)/protocols/groth16/third_party/depends
 
-.PHONY: help check groth16-cpu groth16-cuda groth16-dcu groth16-test-cpu groth16-test-cuda plonk-cpu plonk-test plonk-cuda plonk-test-cuda stark stark-matmul clean
+.PHONY: help check groth16-cpu groth16-cuda groth16-dcu groth16-test-cpu groth16-test-cuda groth16-clean plonk-cpu plonk-test plonk-cuda plonk-test-cuda stark stark-matmul clean
 
 help:
 	@echo "NKR-ZKP targets:"
@@ -20,6 +20,7 @@ help:
 	@echo "  groth16-dcu    configure and build the HIP/DCU backend"
 	@echo "  groth16-test-cpu   run a small CPU setup/prove/verify flow"
 	@echo "  groth16-test-cuda  run a CUDA setup/prove/verify flow"
+	@echo "  groth16-clean  remove all Groth16 CMake build trees"
 	@echo "  plonk-cpu      build the CPU PLONK snapshot"
 	@echo "  plonk-test     run a small PLONK CPU proof"
 	@echo "  plonk-cuda     build the experimental CUDA PLONK snapshot"
@@ -62,6 +63,12 @@ groth16-test-cuda: groth16-cuda
 	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-prove --backend cuda matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
 	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-verify matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
 
+groth16-clean:
+	cmake -E rm -rf \
+		"$(BUILD_DIR)/groth16-cpu" \
+		"$(BUILD_DIR)/groth16-cuda" \
+		"$(BUILD_DIR)/groth16-dcu"
+
 plonk-cpu:
 	cargo build --release --manifest-path protocols/plonk/implementations/cpu/Cargo.toml
 
@@ -91,7 +98,7 @@ stark-matmul:
 		--manifest-path protocols/stark/winterfell/Cargo.toml \
 		-p examples --features concurrent -- matrix-mul -n $(MATRIX_SIZE)
 
-clean:
+clean: groth16-clean
 	cargo clean --manifest-path protocols/plonk/implementations/cpu/Cargo.toml
 	cargo clean --manifest-path protocols/plonk/implementations/cuda/Cargo.toml
 	cargo clean --manifest-path protocols/stark/winterfell/Cargo.toml

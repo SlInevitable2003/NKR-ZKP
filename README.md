@@ -37,6 +37,17 @@ kernel 二进制。
 Groth16 CUDA 默认测试规模为 n=12。矩阵维度可以通过相应目标的 size 变量
 调整；较大的电路会相应增加内存、显存和运行时间。
 
+切换编译器、工具链或目标平台后，先删除原有 CMake 缓存再重新构建：
+
+```bash
+make groth16-clean
+make groth16-cpu
+```
+
+`make clean` 会在清理 Cargo 产物的同时执行同样的 Groth16 清理。Groth16
+需要支持 C++17 的编译器；libff 的 x86-64 汇编优化会按目标架构自动启用或
+关闭，也可以在直接配置 CMake 时通过 `-DUSE_ASM=ON|OFF` 显式覆盖。
+
 ## 各项目怎么运行
 
 下面的命令都从仓库根目录执行。构建命令只生成程序；带 `test` 或示例名称的
@@ -146,7 +157,7 @@ CPU/CUDA 仍是两个独立快照；它们尚未提供跨后端共用的文件�
 
 ### 常用参数
 
-- `JOBS`：编译并发数，默认 2；
+- `JOBS`：编译并发数，默认使用 `nproc` 返回的可用处理器数；
 - `THREADS`：Winterfell/Rayon 线程数，默认 4；
 - `CUDA_ARCH`：目标 GPU 的 CUDA compute capability；
 - `BUILD_DIR`：构建根目录，默认 `build/`。
