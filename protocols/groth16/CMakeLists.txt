@@ -8,6 +8,17 @@ set(NKR_ZKP_GROTH16_DATA_DIR "${CMAKE_CURRENT_BINARY_DIR}/data" CACHE PATH
     "Directory for Groth16 test artifacts")
 option(NKR_ZKP_GROTH16_BUILD_LEGACY_TESTS "Build imported backend microbenchmarks" OFF)
 
+# The vendored dependency snapshot is deliberately limited to the framework's
+# ALT_BN128 production path. Force these values so pre-cleanup CMake caches
+# cannot re-enable source trees that are no longer shipped.
+set(CURVE "ALT_BN128" CACHE STRING "libsnark curve used by NKR-ZKP" FORCE)
+set(DEPENDS_DIR "${NKR_ZKP_GROTH16_DEPS_DIR}/libsnark/depends" CACHE PATH
+    "Vendored libsnark dependency directory" FORCE)
+set(WITH_SUPERCOP OFF CACHE BOOL "ADSNARK/SUPERCOP is not vendored" FORCE)
+set(WITH_PROCPS OFF CACHE BOOL "Disable optional libsnark memory profiling" FORCE)
+set(NKR_ZKP_BUILD_LIBSNARK_AUXILIARY OFF CACHE BOOL
+    "Vendored libsnark demos, profiles, and upstream tests are not shipped" FORCE)
+
 find_package(OpenMP REQUIRED)
 add_subdirectory(
     "${NKR_ZKP_GROTH16_DEPS_DIR}/libsnark"
