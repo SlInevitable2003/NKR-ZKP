@@ -24,8 +24,8 @@ make plonk-test
 
 # Groth16：同一套协议应用通过 --backend 选择 CPU/CUDA/DCU
 make groth16-test-cpu
-make groth16-test-cuda CUDA_ARCH=<arch>
-make groth16-dcu
+make groth16-test-cuda CUDA_ARCH=80       # NVIDIA A100
+make groth16-test-dcu DCU_ARCH=<gfx-arch>
 ```
 
 Groth16 所需的 `libsnark`、`libff`、`libfqfft`、CGBN 等依赖保存在
@@ -37,7 +37,12 @@ kernel 二进制。
 Groth16 CUDA 默认测试规模为 n=12。矩阵维度可以通过相应目标的 size 变量
 调整；较大的电路会相应增加内存、显存和运行时间。
 
-切换编译器、工具链或目标平台后，先删除原有 CMake 缓存再重新构建：
+三个构建目标共用 `build/groth16`。CPU 后端总会编入；CUDA 和 DCU 是构建时
+二选一的可选加速器，因为两者需要不同的编译器和运行时。`--backend` 在运行时
+从当前二进制已经编入的后端中选择。例如 CUDA 构建同时支持 `cpu` 和 `cuda`，
+DCU 构建同时支持 `cpu` 和 `dcu`。
+
+切换 CUDA/DCU 工具链或目标平台前，先删除同一个 CMake 缓存再重新构建：
 
 ```bash
 make groth16-clean
@@ -62,8 +67,11 @@ setup、prove，最后用平台无关的 verifier 验证证明：
 # CPU：默认 n=4
 make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=4
 
-# NVIDIA GPU：CUDA_ARCH 按目标设备设置
-make groth16-test-cuda GROTH16_CUDA_MATRIX_SIZE=12 CUDA_ARCH=<arch>
+# NVIDIA GPU：CUDA_ARCH 是 compute capability；A100 为 80，RTX 5060 为 120
+make groth16-test-cuda GROTH16_CUDA_MATRIX_SIZE=12 CUDA_ARCH=80
+
+# HIP/DCU：DCU_ARCH 是 HIP offload target，以所用 DCU/编译器报告的 gfx 值为准
+make groth16-test-dcu GROTH16_DCU_MATRIX_SIZE=12 DCU_ARCH=<gfx-arch>
 
 # 打印公共流程和后端内部的完整分阶段 profile
 make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=4 PROFILE=1
@@ -73,7 +81,7 @@ make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=4 PROFILE=1
 
 ```bash
 make groth16-cpu
-G16=build/groth16-cpu/protocols/groth16
+G16=build/groth16/bin
 "$G16/groth16-gen" --profile matmul 4
 "$G16/groth16-setup" --profile --backend cpu matmul_4.bin
 "$G16/groth16-prove" --profile --backend cpu matmul_4.bin
@@ -82,23 +90,23 @@ G16=build/groth16-cpu/protocols/groth16
 
 四个程序的 `--profile` 都是可选参数；移除后不打印详细 profile。
 
-生成物位于对应构建目录的 `protocols/groth16/data/`：
+生成物位于 `build/groth16/data/`：
 
 - `matmul_<n>.bin`：R1CS；
 - `matmul_<n>.witness.bin`：满足约束的 witness；
 - `*.pk.bin` / `*.vk.bin`：证明密钥和验证密钥；
 - `*.proof.bin`：最终证明。
 
-CUDA 的手工用法相同，只需使用 `build/groth16-cuda` 并把 setup/prove 的
-`--backend` 改为 `cuda`。
+CUDA 的手工用法相同：先执行 `make groth16-cuda CUDA_ARCH=<arch>`，然后把
+setup/prove 的 `--backend` 改为 `cuda`。程序路径仍是上面的 `G16`，不会因
+后端而改变。
 
-DCU 需要安装可用的 HIP/ROCm 工具链和 DCU 设备。构建后将目录换成
-`build/groth16-dcu`，并用 `--backend dcu` 执行 setup/prove；gen 和 verify
-仍是同一套平台无关应用：
+DCU 需要安装可用的 HIP/DCU 工具链和设备。用 `DCU_ARCH` 指定 HIP 架构，
+并用 `--backend dcu` 执行 setup/prove；gen 和 verify 是平台无关程序：
 
 ```bash
-make groth16-dcu
-G16=build/groth16-dcu/protocols/groth16
+make groth16-dcu DCU_ARCH=<gfx-arch>
+G16=build/groth16/bin
 "$G16/groth16-gen" matmul 4
 "$G16/groth16-setup" --backend dcu matmul_4.bin
 "$G16/groth16-prove" --backend dcu matmul_4.bin
@@ -166,7 +174,11 @@ CPU/CUDA 仍是两个独立快照；它们尚未提供跨后端共用的文件�
 - `JOBS`：编译并发数，默认使用 `nproc` 返回的可用处理器数；
 - `THREADS`：Winterfell/Rayon 线程数，默认 4；
 - `PROFILE`：设为 `1` 时向支持的运行目标传递 `--profile`；
-- `CUDA_ARCH`：目标 GPU 的 CUDA compute capability；
+- `CUDA_ARCH`：NVIDIA GPU 的 CUDA compute capability，例如 A100 为 `80`；
+- `DCU_ARCH`：HIP/DCU 的 offload target（`CMAKE_HIP_ARCHITECTURES`），例如工具链报告的 `gfx...`；
+- `GROTH16_BUILD_DIR`：统一的 Groth16 构建目录，默认 `build/groth16`；
+- `GROTH16_BIN_DIR`：四个 Groth16 程序的统一目录，默认 `build/groth16/bin`；
+- `GROTH16_DATA_DIR`：Groth16 测试数据和证明产物目录，默认 `build/groth16/data`；
 - `BUILD_DIR`：构建根目录，默认 `build/`。
 
 ## 目录

@@ -1,18 +1,24 @@
 .DEFAULT_GOAL := help
 
 BUILD_DIR ?= build
+GROTH16_BUILD_DIR ?= $(BUILD_DIR)/groth16
+GROTH16_BIN_DIR ?= $(GROTH16_BUILD_DIR)/bin
+GROTH16_DATA_DIR ?= $(GROTH16_BUILD_DIR)/data
 JOBS ?= $(shell nproc)
 THREADS ?= 4
 MATRIX_SIZE ?= 4
 PROFILE ?= 0
 CUDA_ARCH ?= 120
+DCU_ARCH ?=
 CUDA_HOME ?= /usr/local/cuda
 GROTH16_CPU_MATRIX_SIZE ?= 4
 GROTH16_CUDA_MATRIX_SIZE ?= 12
+GROTH16_DCU_MATRIX_SIZE ?= 12
 GROTH16_DEPS_DIR ?= $(CURDIR)/protocols/groth16/third_party/depends
 PROFILE_FLAG = $(if $(filter 1 true yes on,$(PROFILE)),--profile,)
+DCU_ARCH_FLAG = $(if $(strip $(DCU_ARCH)),-DCMAKE_HIP_ARCHITECTURES=$(DCU_ARCH),)
 
-.PHONY: help check groth16-cpu groth16-cuda groth16-dcu groth16-test-cpu groth16-test-cuda groth16-clean plonk-cpu plonk-test plonk-cuda plonk-test-cuda stark stark-matmul clean
+.PHONY: help check groth16-cpu groth16-cuda groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-dcu groth16-clean plonk-cpu plonk-test plonk-cuda plonk-test-cuda stark stark-matmul clean
 
 help:
 	@echo "NKR-ZKP targets:"
@@ -22,6 +28,7 @@ help:
 	@echo "  groth16-dcu    configure and build the HIP/DCU backend"
 	@echo "  groth16-test-cpu   run a small CPU setup/prove/verify flow"
 	@echo "  groth16-test-cuda  run a CUDA setup/prove/verify flow"
+	@echo "  groth16-test-dcu   run a DCU setup/prove/verify flow"
 	@echo "  groth16-clean  remove all Groth16 CMake build trees"
 	@echo "  plonk-cpu      build the CPU PLONK snapshot"
 	@echo "  plonk-test     run a small PLONK CPU proof"
@@ -34,39 +41,52 @@ check:
 	@./scripts/check-layout.sh
 
 groth16-cpu:
-	cmake -S . -B $(BUILD_DIR)/groth16-cpu \
-		-DNKR_ZKP_GROTH16_BACKEND=CPU \
+	cmake -S . -B $(GROTH16_BUILD_DIR) \
+		-DNKR_ZKP_GROTH16_ACCELERATOR=NONE \
+		-DNKR_ZKP_GROTH16_BIN_DIR="$(abspath $(GROTH16_BIN_DIR))" \
+		-DNKR_ZKP_GROTH16_DATA_DIR="$(abspath $(GROTH16_DATA_DIR))" \
 		-DNKR_ZKP_GROTH16_DEPS_DIR="$(GROTH16_DEPS_DIR)"
-	cmake --build $(BUILD_DIR)/groth16-cpu --parallel $(JOBS)
+	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS)
 
 groth16-cuda:
-	PATH="$(CUDA_HOME)/bin:$$PATH" CUDACXX="$(CUDA_HOME)/bin/nvcc" cmake -S . -B $(BUILD_DIR)/groth16-cuda \
-		-DNKR_ZKP_GROTH16_BACKEND=CUDA \
+	PATH="$(CUDA_HOME)/bin:$$PATH" CUDACXX="$(CUDA_HOME)/bin/nvcc" cmake -S . -B $(GROTH16_BUILD_DIR) \
+		-DNKR_ZKP_GROTH16_ACCELERATOR=CUDA \
+		-DNKR_ZKP_GROTH16_BIN_DIR="$(abspath $(GROTH16_BIN_DIR))" \
+		-DNKR_ZKP_GROTH16_DATA_DIR="$(abspath $(GROTH16_DATA_DIR))" \
 		-DNKR_ZKP_GROTH16_DEPS_DIR="$(GROTH16_DEPS_DIR)" \
 		-DCMAKE_CUDA_ARCHITECTURES=$(CUDA_ARCH)
 	PATH="$(CUDA_HOME)/bin:$$PATH" \
-		cmake --build $(BUILD_DIR)/groth16-cuda --parallel $(JOBS)
+		cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS)
 
 groth16-dcu:
-	cmake -S . -B $(BUILD_DIR)/groth16-dcu \
-		-DNKR_ZKP_GROTH16_BACKEND=DCU \
-		-DNKR_ZKP_GROTH16_DEPS_DIR="$(GROTH16_DEPS_DIR)"
-	cmake --build $(BUILD_DIR)/groth16-dcu -j$(JOBS)
+	cmake -S . -B $(GROTH16_BUILD_DIR) \
+		-DNKR_ZKP_GROTH16_ACCELERATOR=DCU \
+		-DNKR_ZKP_GROTH16_BIN_DIR="$(abspath $(GROTH16_BIN_DIR))" \
+		-DNKR_ZKP_GROTH16_DATA_DIR="$(abspath $(GROTH16_DATA_DIR))" \
+		-DNKR_ZKP_GROTH16_DEPS_DIR="$(GROTH16_DEPS_DIR)" $(DCU_ARCH_FLAG)
+	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS)
 
 groth16-test-cpu: groth16-cpu
-	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-gen $(PROFILE_FLAG) matmul $(GROTH16_CPU_MATRIX_SIZE)
-	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-setup $(PROFILE_FLAG) --backend cpu matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
-	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-prove $(PROFILE_FLAG) --backend cpu matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
-	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-verify $(PROFILE_FLAG) matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
+	$(GROTH16_BIN_DIR)/groth16-gen $(PROFILE_FLAG) matmul $(GROTH16_CPU_MATRIX_SIZE)
+	$(GROTH16_BIN_DIR)/groth16-setup $(PROFILE_FLAG) --backend cpu matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
+	$(GROTH16_BIN_DIR)/groth16-prove $(PROFILE_FLAG) --backend cpu matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
+	$(GROTH16_BIN_DIR)/groth16-verify $(PROFILE_FLAG) matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
 
 groth16-test-cuda: groth16-cuda
-	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-gen $(PROFILE_FLAG) matmul $(GROTH16_CUDA_MATRIX_SIZE)
-	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-setup $(PROFILE_FLAG) --backend cuda matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
-	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-prove $(PROFILE_FLAG) --backend cuda matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
-	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-verify $(PROFILE_FLAG) matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
+	$(GROTH16_BIN_DIR)/groth16-gen $(PROFILE_FLAG) matmul $(GROTH16_CUDA_MATRIX_SIZE)
+	$(GROTH16_BIN_DIR)/groth16-setup $(PROFILE_FLAG) --backend cuda matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
+	$(GROTH16_BIN_DIR)/groth16-prove $(PROFILE_FLAG) --backend cuda matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
+	$(GROTH16_BIN_DIR)/groth16-verify $(PROFILE_FLAG) matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
+
+groth16-test-dcu: groth16-dcu
+	$(GROTH16_BIN_DIR)/groth16-gen $(PROFILE_FLAG) matmul $(GROTH16_DCU_MATRIX_SIZE)
+	$(GROTH16_BIN_DIR)/groth16-setup $(PROFILE_FLAG) --backend dcu matmul_$(GROTH16_DCU_MATRIX_SIZE).bin
+	$(GROTH16_BIN_DIR)/groth16-prove $(PROFILE_FLAG) --backend dcu matmul_$(GROTH16_DCU_MATRIX_SIZE).bin
+	$(GROTH16_BIN_DIR)/groth16-verify $(PROFILE_FLAG) matmul_$(GROTH16_DCU_MATRIX_SIZE).bin
 
 groth16-clean:
 	cmake -E rm -rf \
+		"$(GROTH16_BUILD_DIR)" \
 		"$(BUILD_DIR)/groth16-cpu" \
 		"$(BUILD_DIR)/groth16-cuda" \
 		"$(BUILD_DIR)/groth16-dcu"

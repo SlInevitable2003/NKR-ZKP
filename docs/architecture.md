@@ -12,7 +12,7 @@
 
 ## 当前状态
 
-Groth16 的 `app/` 现在提供同一套 `gen/setup/prove/verify` 协议入口，setup 和 prove 通过 `Backend` 接口选择 CPU、CUDA 或 DCU；验证、盲化、文件格式、协议类型和 R1CS 数据结构均位于 `common/`。CUDA 与 DCU 的运行时、设备缓冲区和 kernel 只保留在各自后端中。DCU 导入版本目前仅加速 prove，因此 DCU setup 会显式委托 CPU 基线。现存 `.cuh`/`.hip` 大部分仍同时含算法和运行时调用，后续应按算子逐个抽取，不能只做全局文本替换。
+Groth16 的 `app/` 现在提供同一套 `gen/setup/prove/verify` 协议入口。gen 和 verify 只链接公共协议层；setup 和 prove 通过 `Backend` 接口在当前构建已包含的 CPU、CUDA 或 DCU 实现之间选择。CPU 始终可用，CUDA/DCU 作为依赖不同工具链的可选加速器在构建时选择，所有配置共用 `build/groth16`。验证、盲化、文件格式、协议类型和 R1CS 数据结构均位于 `common/`。CUDA 与 DCU 的运行时、设备缓冲区和 kernel 只保留在各自后端中。DCU 导入版本目前仅加速 prove，因此 DCU setup 会显式委托 CPU 基线。现存 `.cuh`/`.hip` 大部分仍同时含算法和运行时调用，后续应按算子逐个抽取，不能只做全局文本替换。
 
 PLONK 的两个目录来自没有 Git 历史的独立实验快照，而且 GPU 版本修改了协议核心和 `ark-poly-commit`。为避免错误合并，当前保留 CPU 与 CUDA 两个可独立审计的实现。下一阶段应先定义 `PolynomialCommitmentBackend` 和 `MsmBackend`，然后以 CPU 版本为公共协议层，把 CUDA fork 变成可选后端。
 

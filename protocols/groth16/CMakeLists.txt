@@ -4,7 +4,9 @@ if(NOT IS_DIRECTORY "${NKR_ZKP_GROTH16_DEPS_DIR}/libsnark")
     message(FATAL_ERROR "Groth16 dependencies not found at ${NKR_ZKP_GROTH16_DEPS_DIR}")
 endif()
 
-set(NKR_ZKP_GROTH16_DATA_DIR "${CMAKE_CURRENT_BINARY_DIR}/data" CACHE PATH
+set(NKR_ZKP_GROTH16_BIN_DIR "${CMAKE_BINARY_DIR}/bin" CACHE PATH
+    "Directory for Groth16 executables")
+set(NKR_ZKP_GROTH16_DATA_DIR "${CMAKE_BINARY_DIR}/data" CACHE PATH
     "Directory for Groth16 test artifacts")
 option(NKR_ZKP_GROTH16_BUILD_LEGACY_TESTS "Build imported backend microbenchmarks" OFF)
 
@@ -51,32 +53,44 @@ target_link_libraries(nkr_groth16_common PUBLIC snark OpenMP::OpenMP_CXX)
 add_library(nkr_groth16_cpu STATIC backends/cpu/src/backend.cpp)
 target_link_libraries(nkr_groth16_cpu PUBLIC nkr_groth16_common)
 
-set(NKR_ZKP_GROTH16_BACKEND_TARGET "")
-if(NKR_ZKP_GROTH16_BACKEND STREQUAL "CUDA")
+set(NKR_ZKP_GROTH16_ACCELERATOR_TARGET "")
+if(NKR_ZKP_GROTH16_ACCELERATOR STREQUAL "CUDA")
     enable_language(CUDA)
     if(NOT CMAKE_CUDA_ARCHITECTURES)
         set(CMAKE_CUDA_ARCHITECTURES 120)
     endif()
     add_subdirectory(backends/cuda)
-    set(NKR_ZKP_GROTH16_BACKEND_TARGET nkr_groth16_cuda)
-    target_compile_definitions(nkr_groth16_common PUBLIC NKR_GROTH16_ACCELERATOR_CUDA=1)
-elseif(NKR_ZKP_GROTH16_BACKEND STREQUAL "DCU")
+    set(NKR_ZKP_GROTH16_ACCELERATOR_TARGET nkr_groth16_cuda)
+    target_compile_definitions(nkr_groth16_common PRIVATE NKR_GROTH16_ACCELERATOR_CUDA=1)
+elseif(NKR_ZKP_GROTH16_ACCELERATOR STREQUAL "DCU")
     enable_language(HIP)
     add_subdirectory(backends/dcu)
-    set(NKR_ZKP_GROTH16_BACKEND_TARGET nkr_groth16_dcu)
-    target_compile_definitions(nkr_groth16_common PUBLIC NKR_GROTH16_ACCELERATOR_DCU=1)
-elseif(NOT NKR_ZKP_GROTH16_BACKEND STREQUAL "CPU")
-    message(FATAL_ERROR "Unsupported Groth16 backend: ${NKR_ZKP_GROTH16_BACKEND}")
+    set(NKR_ZKP_GROTH16_ACCELERATOR_TARGET nkr_groth16_dcu)
+    target_compile_definitions(nkr_groth16_common PRIVATE NKR_GROTH16_ACCELERATOR_DCU=1)
+elseif(NOT NKR_ZKP_GROTH16_ACCELERATOR STREQUAL "NONE")
+    message(FATAL_ERROR
+        "Unsupported Groth16 accelerator: ${NKR_ZKP_GROTH16_ACCELERATOR}")
 endif()
 
-foreach(app gen setup prove verify)
+foreach(app gen verify)
     add_executable(groth16-${app} "app/${app}.cpp")
-    target_link_libraries(groth16-${app} PRIVATE
-        nkr_groth16_common nkr_groth16_cpu ${NKR_ZKP_GROTH16_BACKEND_TARGET})
+    set_target_properties(groth16-${app} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${NKR_ZKP_GROTH16_BIN_DIR}")
+    target_link_libraries(groth16-${app} PRIVATE nkr_groth16_common)
     target_compile_definitions(groth16-${app} PRIVATE
         APP_DATA_DIR="${NKR_ZKP_GROTH16_DATA_DIR}")
 endforeach()
 
-if(NKR_ZKP_GROTH16_BACKEND STREQUAL "CUDA")
+foreach(app setup prove)
+    add_executable(groth16-${app} "app/${app}.cpp")
+    set_target_properties(groth16-${app} PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${NKR_ZKP_GROTH16_BIN_DIR}")
+    target_link_libraries(groth16-${app} PRIVATE
+        nkr_groth16_common nkr_groth16_cpu ${NKR_ZKP_GROTH16_ACCELERATOR_TARGET})
+    target_compile_definitions(groth16-${app} PRIVATE
+        APP_DATA_DIR="${NKR_ZKP_GROTH16_DATA_DIR}")
+endforeach()
+
+if(NKR_ZKP_GROTH16_ACCELERATOR STREQUAL "CUDA")
     set_target_properties(groth16-setup groth16-prove PROPERTIES LINKER_LANGUAGE CUDA)
 endif()
