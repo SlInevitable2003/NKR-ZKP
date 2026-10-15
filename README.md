@@ -64,6 +64,9 @@ make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=4
 
 # NVIDIA GPU：CUDA_ARCH 按目标设备设置
 make groth16-test-cuda GROTH16_CUDA_MATRIX_SIZE=12 CUDA_ARCH=<arch>
+
+# 打印公共流程和后端内部的完整分阶段 profile
+make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=4 PROFILE=1
 ```
 
 也可以在构建后手工执行四个阶段。下面以 CPU 和 `n=4` 为例：
@@ -71,11 +74,13 @@ make groth16-test-cuda GROTH16_CUDA_MATRIX_SIZE=12 CUDA_ARCH=<arch>
 ```bash
 make groth16-cpu
 G16=build/groth16-cpu/protocols/groth16
-"$G16/groth16-gen" matmul 4
-"$G16/groth16-setup" --backend cpu matmul_4.bin
-"$G16/groth16-prove" --backend cpu matmul_4.bin
-"$G16/groth16-verify" matmul_4.bin
+"$G16/groth16-gen" --profile matmul 4
+"$G16/groth16-setup" --profile --backend cpu matmul_4.bin
+"$G16/groth16-prove" --profile --backend cpu matmul_4.bin
+"$G16/groth16-verify" --profile matmul_4.bin
 ```
+
+四个程序的 `--profile` 都是可选参数；移除后不打印详细 profile。
 
 生成物位于对应构建目录的 `protocols/groth16/data/`：
 
@@ -106,12 +111,13 @@ G16=build/groth16-dcu/protocols/groth16
 Rayon 工作线程数：
 
 ```bash
-make stark-matmul THREADS=4 MATRIX_SIZE=4
+make stark-matmul THREADS=4 MATRIX_SIZE=4 PROFILE=1
 ```
 
-`MATRIX_SIZE` 必须是至少为 2 的 2 次幂。程序会在终端输出矩阵计算、trace
-构造、证明生成和验证的分阶段耗时，以及证明大小和安全级别；证明不会默认
-持久化为文件。
+`MATRIX_SIZE` 必须是至少为 2 的 2 次幂。`PROFILE=1` 会输出矩阵计算、trace
+构造、证明生成和验证的分阶段耗时，并启用 Winterfell tracing；不启用时只
+输出运行结果、总体证明/验证时间、证明大小和安全级别。证明不会默认持久化
+为文件。
 
 同一个 runner 还包含 Fibonacci、Rescue、Merkle 等例子，例如：
 
@@ -159,6 +165,7 @@ CPU/CUDA 仍是两个独立快照；它们尚未提供跨后端共用的文件�
 
 - `JOBS`：编译并发数，默认使用 `nproc` 返回的可用处理器数；
 - `THREADS`：Winterfell/Rayon 线程数，默认 4；
+- `PROFILE`：设为 `1` 时向支持的运行目标传递 `--profile`；
 - `CUDA_ARCH`：目标 GPU 的 CUDA compute capability；
 - `BUILD_DIR`：构建根目录，默认 `build/`。
 

@@ -48,6 +48,10 @@ pub struct ExampleOptions {
     #[structopt(subcommand)]
     pub example: ExampleType,
 
+    /// Print detailed execution and protocol profiling information
+    #[structopt(long, global = true)]
+    profile: bool,
+
     /// Hash function used in the protocol
     #[structopt(short = "h", long = "hash_fn", default_value = "blake3_256")]
     hash_fn: String,
@@ -74,6 +78,10 @@ pub struct ExampleOptions {
 }
 
 impl ExampleOptions {
+    pub fn profile_enabled(&self) -> bool {
+        self.profile
+    }
+
     pub fn to_proof_options(&self, q: usize, b: usize) -> (ProofOptions, HashFunction) {
         let num_queries = self.num_queries.unwrap_or(q);
         let blowup_factor = self.blowup_factor.unwrap_or(b);

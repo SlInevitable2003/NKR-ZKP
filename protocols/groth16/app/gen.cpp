@@ -9,6 +9,7 @@
 #include "libsnark/common/default_types/r1cs_ppzksnark_pp.hpp"
 
 #include "binary_archive.hpp"
+#include "groth16/profile.hpp"
 #include "r1cs/r1cs.hpp"
 
 using namespace std;
@@ -81,7 +82,7 @@ static void build_matmul(R1CSManager<FieldT> &mgr, map<size_t, FieldT> &assignme
 }
 
 static void usage(const char *prog) {
-    cerr << "Usage: " << prog << " <case> [params...]\n"
+    cerr << "Usage: " << prog << " [--profile] <case> [params...]\n"
          << "  cases:\n"
          << "    matmul <size>      matrix-multiplication R1CS of dimension <size>\n"
          << "  Outputs (in " APP_DATA_DIR "):\n"
@@ -91,20 +92,31 @@ static void usage(const char *prog) {
 }
 
 int main(int argc, char *argv[]) {
-    ppT::init_public_params();
+    bool profile = false;
+    vector<string> arguments;
+    for (int i = 1; i < argc; ++i) {
+        if (string(argv[i]) == "--profile") profile = true;
+        else arguments.emplace_back(argv[i]);
+    }
+    if (arguments.empty()) usage(argv[0]);
 
-    if (argc < 2) usage(argv[0]);
-    const string case_name = argv[1];
+    nkr::groth16::configure_profiling(profile);
+    ppT::init_public_params();
+    nkr::groth16::ProfileScope total("groth16.gen.total");
+    const string case_name = arguments[0];
 
     R1CSManager<FieldT> mgr;
     map<size_t, FieldT> assignment;
     string stem;
 
     if (case_name == "matmul") {
-        if (argc < 3) usage(argv[0]);
-        const size_t s = (size_t)atoi(argv[2]);
+        if (arguments.size() < 2) usage(argv[0]);
+        const size_t s = (size_t)atoi(arguments[1].c_str());
         if (s == 0) usage(argv[0]);
-        build_matmul(mgr, assignment, s);
+        {
+            nkr::groth16::ProfileScope stage("groth16.gen.build_matmul");
+            build_matmul(mgr, assignment, s);
+        }
         stem = "matmul_" + to_string(s);
     } else {
         cerr << "Unknown case: " << case_name << "\n";
@@ -112,7 +124,10 @@ int main(int argc, char *argv[]) {
     }
 
     CircuitOutput<FieldT> out;
-    finalize_circuit(mgr, assignment, out);
+    {
+        nkr::groth16::ProfileScope stage("groth16.gen.finalize_circuit");
+        finalize_circuit(mgr, assignment, out);
+    }
 
     printf("* R1CS constraints: %zu\n", out.A.num_rows);
     printf("* R1CS variables:   %zu (public: %zu, private: %zu)\n", out.A.num_cols, out.k, out.A.num_cols - 1 - out.k);
@@ -122,20 +137,26 @@ int main(int argc, char *argv[]) {
     const string r1cs_path = data_dir + "/" + stem + ".bin";
     const string witness_path = data_dir + "/" + stem + ".witness.bin";
 
-    BinaryArchive ar;
-    ar.open_for_write(r1cs_path);
-    ar.write(out.k);
-    ar.write(out.A.num_cols);
-    ar.write(out.A.row_ptr); ar.write(out.A.col_idx); ar.write(out.A.values);
-    ar.write(out.B.row_ptr); ar.write(out.B.col_idx); ar.write(out.B.values);
-    ar.write(out.C.row_ptr); ar.write(out.C.col_idx); ar.write(out.C.values);
-    ar.close();
+    {
+        nkr::groth16::ProfileScope stage("groth16.gen.write_circuit");
+        BinaryArchive ar;
+        ar.open_for_write(r1cs_path);
+        ar.write(out.k);
+        ar.write(out.A.num_cols);
+        ar.write(out.A.row_ptr); ar.write(out.A.col_idx); ar.write(out.A.values);
+        ar.write(out.B.row_ptr); ar.write(out.B.col_idx); ar.write(out.B.values);
+        ar.write(out.C.row_ptr); ar.write(out.C.col_idx); ar.write(out.C.values);
+        ar.close();
+    }
     cout << "Wrote R1CS to " << r1cs_path << endl;
 
-    BinaryArchive war;
-    war.open_for_write(witness_path);
-    war.write(out.z);
-    war.close();
+    {
+        nkr::groth16::ProfileScope stage("groth16.gen.write_witness");
+        BinaryArchive war;
+        war.open_for_write(witness_path);
+        war.write(out.z);
+        war.close();
+    }
     cout << "Wrote witness to " << witness_path << endl;
 
     return 0;

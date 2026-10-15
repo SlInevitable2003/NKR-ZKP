@@ -37,17 +37,18 @@ pub fn get_example(
     options: &ExampleOptions,
     matrix_size: usize,
 ) -> Result<Box<dyn Example>, String> {
+    let profile = options.profile_enabled();
     let (options, hash_fn) = options.to_proof_options(28, 8);
 
     match hash_fn {
         HashFunction::Blake3_192 => {
-            Ok(Box::new(MatrixMulExample::<Blake3_192>::new(matrix_size, options)))
+            Ok(Box::new(MatrixMulExample::<Blake3_192>::new(matrix_size, options, profile)))
         },
         HashFunction::Blake3_256 => {
-            Ok(Box::new(MatrixMulExample::<Blake3_256>::new(matrix_size, options)))
+            Ok(Box::new(MatrixMulExample::<Blake3_256>::new(matrix_size, options, profile)))
         },
         HashFunction::Sha3_256 => {
-            Ok(Box::new(MatrixMulExample::<Sha3_256>::new(matrix_size, options)))
+            Ok(Box::new(MatrixMulExample::<Sha3_256>::new(matrix_size, options, profile)))
         },
         _ => Err("The specified hash function cannot be used with this example.".to_string()),
     }
@@ -59,29 +60,34 @@ pub struct MatrixMulExample<H: ElementHasher> {
     a: Vec<BaseElement>,
     b: Vec<BaseElement>,
     c: Vec<BaseElement>,
+    profile: bool,
     _hasher: PhantomData<H>,
 }
 
 impl<H: ElementHasher> MatrixMulExample<H> {
-    pub fn new(matrix_size: usize, options: ProofOptions) -> Self {
+    pub fn new(matrix_size: usize, options: ProofOptions, profile: bool) -> Self {
         assert!(matrix_size.is_power_of_two(), "matrix size must be a power of 2");
         assert!(matrix_size >= 2, "matrix size must be at least 2");
 
         let input_start = Instant::now();
         let a = build_matrix(matrix_size);
         let b = build_matrix(matrix_size);
-        println!(
-            "MatrixMul timing: input generation = {:.3} ms",
-            input_start.elapsed().as_secs_f64() * 1000.0
-        );
+        if profile {
+            println!(
+                "[profile] stark.matmul.input_generation = {:.3} ms",
+                input_start.elapsed().as_secs_f64() * 1000.0
+            );
+        }
 
         let multiply_start = Instant::now();
         let c = multiply(&a, &b, matrix_size);
-        println!(
-            "MatrixMul timing: {0}x{0} multiplication = {1:.3} ms",
-            matrix_size,
-            multiply_start.elapsed().as_secs_f64() * 1000.0
-        );
+        if profile {
+            println!(
+                "[profile] stark.matmul.multiplication_{0}x{0} = {1:.3} ms",
+                matrix_size,
+                multiply_start.elapsed().as_secs_f64() * 1000.0
+            );
+        }
 
         Self {
             options,
@@ -89,6 +95,7 @@ impl<H: ElementHasher> MatrixMulExample<H> {
             a,
             b,
             c,
+            profile,
             _hasher: PhantomData,
         }
     }
@@ -119,18 +126,22 @@ where
                     tracing::Span::current().record("steps", trace.length());
                     trace
                 });
-        println!(
-            "MatrixMul timing: trace construction = {:.3} ms ({} steps)",
-            trace_start.elapsed().as_secs_f64() * 1000.0,
-            trace.length()
-        );
+        if self.profile {
+            println!(
+                "[profile] stark.matmul.trace_construction = {:.3} ms ({} steps)",
+                trace_start.elapsed().as_secs_f64() * 1000.0,
+                trace.length()
+            );
+        }
 
         let proof_start = Instant::now();
         let proof = prover.prove(trace).unwrap();
-        println!(
-            "MatrixMul timing: proof generation (excluding trace) = {:.3} ms",
-            proof_start.elapsed().as_secs_f64() * 1000.0
-        );
+        if self.profile {
+            println!(
+                "[profile] stark.matmul.proof_generation_excluding_trace = {:.3} ms",
+                proof_start.elapsed().as_secs_f64() * 1000.0
+            );
+        }
         proof
     }
 
@@ -148,10 +159,12 @@ where
             pub_inputs,
             &acceptable_options,
         );
-        println!(
-            "MatrixMul timing: verification = {:.3} ms",
-            verify_start.elapsed().as_secs_f64() * 1000.0
-        );
+        if self.profile {
+            println!(
+                "[profile] stark.matmul.verification = {:.3} ms",
+                verify_start.elapsed().as_secs_f64() * 1000.0
+            );
+        }
         result
     }
 

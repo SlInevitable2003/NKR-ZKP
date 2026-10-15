@@ -21,9 +21,13 @@ use winterfell::Proof;
 // ================================================================================================
 
 fn main() {
+    // Read command-line args before configuring tracing so --profile can
+    // control detailed protocol output without requiring an environment variable.
+    let options = ExampleOptions::from_args();
+
     // configure logging
     if std::env::var("WINTER_LOG").is_err() {
-        std::env::set_var("WINTER_LOG", "info");
+        std::env::set_var("WINTER_LOG", if options.profile_enabled() { "info" } else { "warn" });
     }
     let registry =
         tracing_subscriber::registry::Registry::default().with(EnvFilter::from_env("WINTER_LOG"));
@@ -45,9 +49,6 @@ fn main() {
         registry.with(format).init();
     }
 
-    // read command-line args
-    let options = ExampleOptions::from_args();
-
     // instantiate and prepare the example
     let example = match options.example {
         ExampleType::Fib { sequence_length } => {
@@ -66,9 +67,7 @@ fn main() {
             fibonacci::fib_small::get_example(&options, sequence_length)
         },
         #[cfg(feature = "std")]
-        ExampleType::MatrixMul { matrix_size } => {
-            matrixmul::get_example(&options, matrix_size)
-        },
+        ExampleType::MatrixMul { matrix_size } => matrixmul::get_example(&options, matrix_size),
         ExampleType::Vdf { num_steps } => vdf::regular::get_example(&options, num_steps),
         ExampleType::VdfExempt { num_steps } => vdf::exempt::get_example(&options, num_steps),
         ExampleType::Rescue { chain_length } => rescue::get_example(&options, chain_length),

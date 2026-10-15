@@ -4,11 +4,13 @@ BUILD_DIR ?= build
 JOBS ?= $(shell nproc)
 THREADS ?= 4
 MATRIX_SIZE ?= 4
+PROFILE ?= 0
 CUDA_ARCH ?= 120
 CUDA_HOME ?= /usr/local/cuda
 GROTH16_CPU_MATRIX_SIZE ?= 4
 GROTH16_CUDA_MATRIX_SIZE ?= 12
 GROTH16_DEPS_DIR ?= $(CURDIR)/protocols/groth16/third_party/depends
+PROFILE_FLAG = $(if $(filter 1 true yes on,$(PROFILE)),--profile,)
 
 .PHONY: help check groth16-cpu groth16-cuda groth16-dcu groth16-test-cpu groth16-test-cuda groth16-clean plonk-cpu plonk-test plonk-cuda plonk-test-cuda stark stark-matmul clean
 
@@ -52,16 +54,16 @@ groth16-dcu:
 	cmake --build $(BUILD_DIR)/groth16-dcu -j$(JOBS)
 
 groth16-test-cpu: groth16-cpu
-	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-gen matmul $(GROTH16_CPU_MATRIX_SIZE)
-	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-setup --backend cpu matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
-	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-prove --backend cpu matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
-	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-verify matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
+	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-gen $(PROFILE_FLAG) matmul $(GROTH16_CPU_MATRIX_SIZE)
+	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-setup $(PROFILE_FLAG) --backend cpu matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
+	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-prove $(PROFILE_FLAG) --backend cpu matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
+	$(BUILD_DIR)/groth16-cpu/protocols/groth16/groth16-verify $(PROFILE_FLAG) matmul_$(GROTH16_CPU_MATRIX_SIZE).bin
 
 groth16-test-cuda: groth16-cuda
-	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-gen matmul $(GROTH16_CUDA_MATRIX_SIZE)
-	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-setup --backend cuda matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
-	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-prove --backend cuda matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
-	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-verify matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
+	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-gen $(PROFILE_FLAG) matmul $(GROTH16_CUDA_MATRIX_SIZE)
+	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-setup $(PROFILE_FLAG) --backend cuda matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
+	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-prove $(PROFILE_FLAG) --backend cuda matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
+	$(BUILD_DIR)/groth16-cuda/protocols/groth16/groth16-verify $(PROFILE_FLAG) matmul_$(GROTH16_CUDA_MATRIX_SIZE).bin
 
 groth16-clean:
 	cmake -E rm -rf \
@@ -96,7 +98,7 @@ stark:
 stark-matmul:
 	RAYON_NUM_THREADS=$(THREADS) cargo run --release \
 		--manifest-path protocols/stark/winterfell/Cargo.toml \
-		-p examples --features concurrent -- matrix-mul -n $(MATRIX_SIZE)
+		-p examples --features concurrent -- matrix-mul -n $(MATRIX_SIZE) $(PROFILE_FLAG)
 
 clean: groth16-clean
 	cargo clean --manifest-path protocols/plonk/implementations/cpu/Cargo.toml
