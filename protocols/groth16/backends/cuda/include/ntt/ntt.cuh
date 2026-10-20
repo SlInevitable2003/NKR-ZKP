@@ -156,8 +156,9 @@ public:
         );
 
         FieldT *coset_power_table = this->coset_power_table;
-        thrust::for_each(thrust::device, polyA, polyA + scale, [=] __device__ (FieldT &val) {
-            FieldT factor = coset_power_table[scale] - FieldT::one();
+        const size_t element_count = scale;
+        thrust::for_each(thrust::device, polyA, polyA + scale, [coset_power_table, element_count] __device__ (FieldT &val) {
+            FieldT factor = coset_power_table[element_count] - FieldT::one();
             val /= factor;
         });
     }

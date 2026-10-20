@@ -15,8 +15,8 @@
 template<typename FieldT, typename HostFT, typename key_t = uint16_t>
 class BucketContext {
     TypedGpuArena arena;
-    void *temp_storage;
-    size_t temp_storage_bytes;
+    void *temp_storage = nullptr;
+    size_t temp_storage_bytes = 0;
 
 public:
     FieldT *scalars;
@@ -42,7 +42,7 @@ public:
         arena.commit("BucketContext");
     }
 
-    ~BucketContext() { cudaFree(temp_storage); }
+    ~BucketContext() { if (temp_storage) cudaFree(temp_storage); }
 
     void load_scalars(const HostFT *host_scalars) { cudaMemcpy(scalars, host_scalars, scale * sizeof(FieldT), cudaMemcpyHostToDevice); }
     void load_scalars(FieldT *device_scalars) { cudaMemcpy(scalars, device_scalars, scale * sizeof(FieldT), cudaMemcpyDeviceToDevice); }
