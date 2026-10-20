@@ -3,6 +3,9 @@
 
 #include <cooperative_groups.h>
 
+// CUDA 11.7 does not provide cooperative_groups::invoke_one. These kernels
+// always operate on a complete thread block, so rank zero is an equivalent
+// and deterministic leader; the existing block syncs preserve visibility.
 #define WRONG_FOR_SPEED 1
 #define GA_BLK_SIZ 256
 #define IBA_BLK_PER_SM 3
@@ -25,7 +28,8 @@ __global__ __launch_bounds__(GA_BLK_SIZ) void intra_bucket_accumulation(
     const uint32_t buckets_per_block = GA_BLK_SIZ / 32;
 
     __shared__ uint32_t task_base_id;
-    cg::invoke_one(g, [&] () { task_base_id = atomicAdd(&g_task_id[lo_window_id], buckets_per_block); });
+    if (thread_id == 0)
+        task_base_id = atomicAdd(&g_task_id[lo_window_id], buckets_per_block);
     g.sync();
 
     uint32_t bucket_id = task_base_id + warp_id;
@@ -124,7 +128,8 @@ __global__ __launch_bounds__(BLK_SIZ) void bucket_reduce(
     scan.to_jacobian();
     g.sync();
 
-    cg::invoke_one(g, [&] __device__ () { windows_sum[window_id] = *reinterpret_cast<ProjT*>(&scan); });
+    if (lane_id == 0)
+        windows_sum[window_id] = *reinterpret_cast<ProjT*>(&scan);
     g.sync();
 
     shmem[BLK_SIZ - 1 - lane_id] = sum;
@@ -139,7 +144,8 @@ __global__ __launch_bounds__(BLK_SIZ) void bucket_reduce(
         g.sync();
     }
 
-    cg::invoke_one(g, [&] __device__ () { shmem[BLK_SIZ - 1].inf(); });
+    if (lane_id == 0)
+        shmem[BLK_SIZ - 1].inf();
     g.sync();
 
     for (int i = 1; i < BLK_SIZ; i <<= 1) {
@@ -154,11 +160,11 @@ __global__ __launch_bounds__(BLK_SIZ) void bucket_reduce(
     sum.to_jacobian();
     g.sync();
 
-    cg::invoke_one(g, [&] __device__ () {
+    if (lane_id == 0) {
         ProjT res = *reinterpret_cast<ProjT*>(&sum);
         for (int i = 1; i < buckets_per_thread; i <<= 1) res.dbl();
         windows_sum[window_id].add(res);
-    });
+    }
 }
 
 enum class IBAWriteMode { OVERWRITE, ACCUMULATE };
@@ -182,7 +188,8 @@ __global__ __launch_bounds__(GA_BLK_SIZ) void intra_bucket_accumulation_tiled(
     const uint32_t buckets_per_block = GA_BLK_SIZ / 32;
 
     __shared__ uint32_t task_base_id;
-    cg::invoke_one(g, [&] () { task_base_id = atomicAdd(&g_task_id[lo_window_id], buckets_per_block); });
+    if (thread_id == 0)
+        task_base_id = atomicAdd(&g_task_id[lo_window_id], buckets_per_block);
     g.sync();
 
     uint32_t bucket_id = task_base_id + warp_id;
