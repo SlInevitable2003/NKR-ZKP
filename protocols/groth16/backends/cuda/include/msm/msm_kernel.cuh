@@ -10,7 +10,7 @@
 #define GA_BLK_SIZ 256
 #define IBA_BLK_PER_SM 3
 template<typename AffT, typename XYZZT>
-__global__ __launch_bounds__(GA_BLK_SIZ) void intra_bucket_accumulation(
+__global__ __launch_bounds__(GA_BLK_SIZ, IBA_BLK_PER_SM) void intra_bucket_accumulation(
     uint32_t *bucket_off, uint32_t *indices, AffT *points, XYZZT *bucket_sum_WWR,
     uint32_t buckets_count, uint32_t windows_count, uint32_t scale, uint32_t last_window_buckets_count,
     uint32_t lo_windows_count, uint32_t lo_window_id,
@@ -65,7 +65,7 @@ __global__ __launch_bounds__(GA_BLK_SIZ) void intra_bucket_accumulation(
 
 #define WR_BLK_PER_SM 2
 template<typename XYZZT>
-__global__ __launch_bounds__(GA_BLK_SIZ) void warp_reduce(
+__global__ __launch_bounds__(GA_BLK_SIZ, WR_BLK_PER_SM) void warp_reduce(
     XYZZT *buckets_sum_WWR, XYZZT *buckets_sum,
     uint32_t buckets_count, uint32_t windows_count, uint32_t lo_windows_count, uint32_t last_window_buckets_count
 ) {
@@ -169,7 +169,7 @@ __global__ __launch_bounds__(BLK_SIZ) void bucket_reduce(
 
 enum class IBAWriteMode { OVERWRITE, ACCUMULATE };
 template<typename AffT, typename XYZZT>
-__global__ __launch_bounds__(GA_BLK_SIZ) void intra_bucket_accumulation_tiled(
+__global__ __launch_bounds__(GA_BLK_SIZ, IBA_BLK_PER_SM) void intra_bucket_accumulation_tiled(
     uint32_t *bucket_off, uint32_t *indices, AffT *points, XYZZT *bucket_sum_WWR,
     uint32_t buckets_count, uint32_t windows_count, uint32_t scale, uint32_t last_window_buckets_count,
     uint32_t lo_windows_count, uint32_t lo_window_id,
