@@ -11,8 +11,6 @@ target_include_directories(nkr_groth16_cuda PUBLIC
 target_link_libraries(nkr_groth16_cuda PUBLIC nkr_groth16_common)
 target_compile_definitions(nkr_groth16_cuda PUBLIC CURVE_ALT_BN128)
 set_target_properties(nkr_groth16_cuda PROPERTIES
-    CUDA_SEPARABLE_COMPILATION ON
-    CUDA_RESOLVE_DEVICE_SYMBOLS ON
     POSITION_INDEPENDENT_CODE ON)
 
 if(NKR_ZKP_GROTH16_BUILD_LEGACY_TESTS)
