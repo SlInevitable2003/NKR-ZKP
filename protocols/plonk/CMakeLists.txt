@@ -1,9 +1,13 @@
 set(NKR_ZKP_PLONK_BIN_DIR "${CMAKE_BINARY_DIR}/bin" CACHE PATH
     "Directory for PLONK executables")
+set(NKR_ZKP_PLONK_DATA_DIR "${CMAKE_BINARY_DIR}/plonk-data" CACHE PATH
+    "Directory for PLONK artifacts")
 
 add_library(nkr_plonk_common STATIC
     common/src/arithmetization.cpp
     common/src/backend_registry.cpp
+    common/src/io.cpp
+    common/src/profile.cpp
     common/src/protocol.cpp)
 target_compile_features(nkr_plonk_common PUBLIC cxx_std_17)
 target_include_directories(nkr_plonk_common PUBLIC
@@ -40,6 +44,8 @@ foreach(app gen setup prove verify)
         RUNTIME_OUTPUT_DIRECTORY "${NKR_ZKP_PLONK_BIN_DIR}")
     target_link_libraries(plonk-${app} PRIVATE
         nkr_plonk_common nkr_plonk_cpu ${NKR_ZKP_PLONK_ACCELERATOR_TARGET})
+    target_compile_definitions(plonk-${app} PRIVATE
+        APP_DATA_DIR="${NKR_ZKP_PLONK_DATA_DIR}")
 endforeach()
 
 if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")

@@ -1,11 +1,14 @@
 #include "plonk/arithmetization.hpp"
 #include "plonk/backend.hpp"
+#include "plonk/io.hpp"
 #include "plonk/protocol.hpp"
 
 #include <array>
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <stdexcept>
 #include <vector>
 
@@ -98,6 +101,44 @@ bool setup_rejects(Backend &backend,
     return false;
 }
 
+void check_circuit_equal(const Circuit &lhs, const Circuit &rhs)
+{
+    assert(lhs.domain_size == rhs.domain_size);
+    assert(lhs.rows == rhs.rows);
+    assert(lhs.public_inputs == rhs.public_inputs);
+    assert(lhs.q_l == rhs.q_l);
+    assert(lhs.q_r == rhs.q_r);
+    assert(lhs.q_m == rhs.q_m);
+    assert(lhs.q_o == rhs.q_o);
+    assert(lhs.q_c == rhs.q_c);
+    assert(lhs.sigma_1 == rhs.sigma_1);
+    assert(lhs.sigma_2 == rhs.sigma_2);
+    assert(lhs.sigma_3 == rhs.sigma_3);
+}
+
+void check_domain_equal(const DomainParameters &lhs, const DomainParameters &rhs)
+{
+    assert(lhs.domain_size == rhs.domain_size);
+    assert(lhs.quotient_domain_size == rhs.quotient_domain_size);
+    assert(lhs.omega == rhs.omega);
+    assert(lhs.k_1 == rhs.k_1);
+    assert(lhs.k_2 == rhs.k_2);
+    assert(lhs.coset_shift == rhs.coset_shift);
+}
+
+void check_commitments_equal(const CircuitCommitments &lhs,
+                             const CircuitCommitments &rhs)
+{
+    assert(lhs.q_l == rhs.q_l);
+    assert(lhs.q_r == rhs.q_r);
+    assert(lhs.q_m == rhs.q_m);
+    assert(lhs.q_o == rhs.q_o);
+    assert(lhs.q_c == rhs.q_c);
+    assert(lhs.sigma_1 == rhs.sigma_1);
+    assert(lhs.sigma_2 == rhs.sigma_2);
+    assert(lhs.sigma_3 == rhs.sigma_3);
+}
+
 } // namespace
 
 int main()
@@ -174,5 +215,43 @@ int main()
     Circuit invalid_permutation = arithmetization.circuit;
     invalid_permutation.sigma_1[0] = invalid_permutation.sigma_1[1];
     assert(setup_rejects(*backend, invalid_permutation, srs));
+
+    const auto suffix = std::chrono::steady_clock::now().time_since_epoch().count();
+    const std::filesystem::path directory = std::filesystem::temp_directory_path() /
+        ("nkr-plonk-io-test-" + std::to_string(suffix));
+    std::filesystem::create_directories(directory);
+    const ArtifactPaths paths = artifact_paths(directory, "roundtrip.bin");
+    write_circuit(paths.circuit, arithmetization.circuit);
+    write_witness(paths.witness, arithmetization.witness);
+    write_srs(paths.srs, srs);
+    write_proving_key(paths.proving_key, proving_key);
+    write_verification_key(paths.verification_key, verification_key);
+
+    check_circuit_equal(read_circuit(paths.circuit), arithmetization.circuit);
+    const Witness loaded_witness = read_witness(paths.witness);
+    assert(loaded_witness.a == arithmetization.witness.a);
+    assert(loaded_witness.b == arithmetization.witness.b);
+    assert(loaded_witness.c == arithmetization.witness.c);
+    assert(loaded_witness.public_input == arithmetization.witness.public_input);
+    const UniversalSrs loaded_srs = read_srs(paths.srs);
+    assert(loaded_srs.g1_powers == srs.g1_powers);
+    assert(loaded_srs.g2 == srs.g2);
+    assert(loaded_srs.tau_g2 == srs.tau_g2);
+    const ProvingKey loaded_proving_key = read_proving_key(paths.proving_key);
+    check_circuit_equal(loaded_proving_key.circuit, proving_key.circuit);
+    check_domain_equal(loaded_proving_key.domain, proving_key.domain);
+    check_commitments_equal(loaded_proving_key.commitments, proving_key.commitments);
+    assert(loaded_proving_key.fixed.q_l.coefficients ==
+           proving_key.fixed.q_l.coefficients);
+    assert(loaded_proving_key.fixed.sigma_3.coset_evaluations ==
+           proving_key.fixed.sigma_3.coset_evaluations);
+    const VerificationKey loaded_verification_key =
+        read_verification_key(paths.verification_key);
+    check_domain_equal(loaded_verification_key.domain, verification_key.domain);
+    check_commitments_equal(
+        loaded_verification_key.commitments, verification_key.commitments);
+    assert(loaded_verification_key.g2 == verification_key.g2);
+    assert(loaded_verification_key.tau_g2 == verification_key.tau_g2);
+    std::filesystem::remove_all(directory);
     return 0;
 }

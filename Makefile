@@ -4,6 +4,8 @@ BUILD_DIR ?= build
 GROTH16_BUILD_DIR ?= $(BUILD_DIR)/groth16
 GROTH16_BIN_DIR ?= $(GROTH16_BUILD_DIR)/bin
 GROTH16_DATA_DIR ?= $(GROTH16_BUILD_DIR)/data
+PLONK_BIN_DIR ?= $(GROTH16_BUILD_DIR)/bin
+PLONK_DATA_DIR ?= $(GROTH16_BUILD_DIR)/plonk-data
 JOBS ?= $(shell nproc)
 THREADS ?= 4
 MATRIX_SIZE ?= 4
@@ -18,7 +20,7 @@ LIGHTZK_DEPS_DIR ?= $(CURDIR)/third_party/lightzk/depends
 PROFILE_FLAG = $(if $(filter 1 true yes on,$(PROFILE)),--profile,)
 HIP_ARCH_FLAG = $(if $(strip $(HIP_ARCH)),-DCMAKE_HIP_ARCHITECTURES=$(HIP_ARCH),)
 
-.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-clean plonk-scaffold plonk-test-arithmetization plonk-test-cpu-setup stark stark-matmul clean
+.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-clean plonk-cpu plonk-scaffold plonk-test-cpu plonk-test-arithmetization plonk-test-cpu-setup stark stark-matmul clean
 
 help:
 	@echo "NKR-ZKP targets:"
@@ -30,7 +32,8 @@ help:
 	@echo "  groth16-test-cuda  run a CUDA setup/prove/verify flow"
 	@echo "  groth16-test-hip   run a HIP setup/prove/verify flow"
 	@echo "  groth16-clean  remove all Groth16 CMake build trees"
-	@echo "  plonk-scaffold build the PLONK interfaces and placeholder apps"
+	@echo "  plonk-cpu      configure and build PLONK with the CPU backend"
+	@echo "  plonk-test-cpu run PLONK gen and CPU setup with a small matmul circuit"
 	@echo "  plonk-test-arithmetization  build and test the PLONK circuit manager"
 	@echo "  plonk-test-cpu-setup  build and test PLONK CPU Setup"
 	@echo "  stark          build Winterfell with concurrent CPU support"
@@ -44,6 +47,8 @@ groth16-cpu:
 		-DNKR_ZKP_ACCELERATOR=NONE \
 		-DNKR_ZKP_GROTH16_BIN_DIR="$(abspath $(GROTH16_BIN_DIR))" \
 		-DNKR_ZKP_GROTH16_DATA_DIR="$(abspath $(GROTH16_DATA_DIR))" \
+		-DNKR_ZKP_PLONK_BIN_DIR="$(abspath $(PLONK_BIN_DIR))" \
+		-DNKR_ZKP_PLONK_DATA_DIR="$(abspath $(PLONK_DATA_DIR))" \
 		-DNKR_ZKP_LIGHTZK_DEPS_DIR="$(LIGHTZK_DEPS_DIR)"
 	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS)
 
@@ -52,6 +57,8 @@ groth16-cuda:
 		-DNKR_ZKP_ACCELERATOR=CUDA \
 		-DNKR_ZKP_GROTH16_BIN_DIR="$(abspath $(GROTH16_BIN_DIR))" \
 		-DNKR_ZKP_GROTH16_DATA_DIR="$(abspath $(GROTH16_DATA_DIR))" \
+		-DNKR_ZKP_PLONK_BIN_DIR="$(abspath $(PLONK_BIN_DIR))" \
+		-DNKR_ZKP_PLONK_DATA_DIR="$(abspath $(PLONK_DATA_DIR))" \
 		-DNKR_ZKP_LIGHTZK_DEPS_DIR="$(LIGHTZK_DEPS_DIR)" \
 		-DCMAKE_CUDA_ARCHITECTURES=$(CUDA_ARCH)
 	PATH="$(CUDA_HOME)/bin:$$PATH" \
@@ -62,6 +69,8 @@ groth16-hip:
 		-DNKR_ZKP_ACCELERATOR=HIP \
 		-DNKR_ZKP_GROTH16_BIN_DIR="$(abspath $(GROTH16_BIN_DIR))" \
 		-DNKR_ZKP_GROTH16_DATA_DIR="$(abspath $(GROTH16_DATA_DIR))" \
+		-DNKR_ZKP_PLONK_BIN_DIR="$(abspath $(PLONK_BIN_DIR))" \
+		-DNKR_ZKP_PLONK_DATA_DIR="$(abspath $(PLONK_DATA_DIR))" \
 		-DNKR_ZKP_LIGHTZK_DEPS_DIR="$(LIGHTZK_DEPS_DIR)" $(HIP_ARCH_FLAG)
 	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS)
 
@@ -95,9 +104,15 @@ groth16-clean:
 		"$(BUILD_DIR)/groth16-hip" \
 		"$(BUILD_DIR)/groth16-dcu"
 
-plonk-scaffold: groth16-cpu
+plonk-cpu: groth16-cpu
 	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS) \
 		--target plonk-gen plonk-setup plonk-prove plonk-verify
+
+plonk-scaffold: plonk-cpu
+
+plonk-test-cpu: plonk-cpu
+	$(PLONK_BIN_DIR)/plonk-gen matmul 2
+	$(PLONK_BIN_DIR)/plonk-setup --backend cpu matmul_2.bin
 
 plonk-test-arithmetization: groth16-cpu
 	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS) \
