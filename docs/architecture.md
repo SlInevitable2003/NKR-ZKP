@@ -56,7 +56,7 @@ Groth16 是外部 `gen/setup/prove/verify` 组织方式的可用参考，但其�
 
 ## PLONK 范围
 
-PLONK 已实现独立的三线算术化 Manager、CPU Setup 和产物 I/O；Prove、Verify 及加速器语义仍是框架。已删除的 Rust 代码基于另一条 BLS12 系列曲线，实现的是带查找功能的四线系统，因此不会作为新实现的基础。首个实现范围为：
+PLONK 已实现独立的三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify 和产物 I/O；CUDA/HIP 的协议适配仍是框架。已删除的 Rust 代码基于另一条 BLS12 系列曲线，实现的是带查找功能的四线系统，因此不会作为新实现的基础。当前实现范围为：
 
 - BN254/ALT_BN128；
 - KZG 承诺；
@@ -64,7 +64,7 @@ PLONK 已实现独立的三线算术化 Manager、CPU Setup 和产物 I/O；Prov
 - 置换大乘积；
 - 先完成 CPU 参考实现，再基于公共算子增加 CUDA 和 HIP 适配层。
 
-在 Transcript、挑战生成、证明编码和低层协议细节完全确定之前，证明容器保持不透明。
+Transcript、挑战顺序、证明字段和多项式次数遵循 `docs/plonk_protocol_low_level.pdf`。Transcript 采用 SHA3-256，并使用“追加消息、挑战后以摘要重置状态”的强 Fiat–Shamir 结构；证明产物继续使用共享 `BinaryArchive`。
 
 ## 构建模型
 

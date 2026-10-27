@@ -93,10 +93,24 @@ struct VerificationKey {
     G2 tau_g2;
 };
 
-// The proof container is intentionally left opaque until the transcript,
-// BinaryArchive field layout, and exact low-level protocol document are frozen.
 struct Proof {
-    std::vector<std::uint8_t> encoded;
+    G1 a_commitment;
+    G1 b_commitment;
+    G1 c_commitment;
+    G1 z_commitment;
+    G1 t_lo_commitment;
+    G1 t_mid_commitment;
+    G1 t_hi_commitment;
+    Scalar a_zeta = Scalar::zero();
+    Scalar b_zeta = Scalar::zero();
+    Scalar c_zeta = Scalar::zero();
+    Scalar sigma_1_zeta = Scalar::zero();
+    Scalar sigma_2_zeta = Scalar::zero();
+    Scalar z_zeta_omega = Scalar::zero();
+    Scalar p_non_constant_zeta = Scalar::zero();
+    Scalar t_zeta = Scalar::zero();
+    G1 w_zeta;
+    G1 w_zeta_omega;
 };
 
 } // namespace nkr::plonk

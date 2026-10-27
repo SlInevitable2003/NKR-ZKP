@@ -16,7 +16,7 @@ protocols/
     common/                协议类型、I/O、验证及后端注册
     backends/{cpu,cuda,hip}
   plonk/
-    app/                   可用的 gen/setup 与 prove/verify 框架
+    app/                   统一的 gen/setup/prove/verify 命令行程序
     common/                算术化、协议类型、I/O、API 及后端注册
     backends/{cpu,cuda,hip}
   stark/winterfell/
@@ -25,12 +25,12 @@ third_party/lightzk/       内置的 libsnark/libff/libfqfft/CGBN 源码快照
 docs/                      架构、源码来源及协议文档
 ```
 
-CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各自的协议后端中：Groth16 负责 R1CS、QAP 和 SpMV，PLONK 将负责置换、商多项式、线性化与打开证明等逻辑。CUDA 与 HIP 实现相同的算子边界，但分别保留独立内核，以便针对各平台单独优化和审计。
+CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各自的协议后端中：Groth16 负责 R1CS、QAP 和 SpMV，PLONK 负责置换、商多项式、线性化与打开证明等逻辑。CUDA 与 HIP 实现相同的算子边界，但分别保留独立内核，以便针对各平台单独优化和审计。
 
 ## 当前状态
 
 - Groth16 已有可用的 CPU、CUDA 和 HIP 后端。CPU 后端始终参与构建；配置时可以选择 CUDA 或 HIP 加速后端。
-- PLONK 已有独立的三线 Plonkish 算术化 Manager、CPU Setup，以及基于共享 `BinaryArchive` 的电路、见证、SRS、PK/VK 文件 I/O。`plonk-gen` 和 `plonk-setup` 已可使用；Prove 与 Verify 尚未实现，对应命令行程序仍会按设计以状态码 2 退出。
+- PLONK 已实现独立的三线 Plonkish 算术化 Manager、SHA3-256 Transcript，以及 CPU Setup、Prove 和 Verify；电路、见证、SRS、PK/VK 与证明均通过共享 `BinaryArchive` 读写。CUDA/HIP 的 PLONK 协议适配仍是框架。
 - 原有的 Rust PLONK CPU/CUDA 代码已删除。新实现计划以 `docs/plonk_protocol_low_level.pdf` 描述的 BN254、KZG 方案为准。
 - Winterfell 仍作为独立的 Rust CPU 实现保留。
 

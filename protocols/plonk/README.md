@@ -3,13 +3,13 @@
 本目录是基于 BN254 和 KZG 的 PLONK C++ 实现框架，其分层有意与 Groth16 保持一致：
 
 - `app/`：与平台无关的 `gen/setup/prove/verify` 入口；
-- `common/`：协议类型、公共 API、后端选择、产物 I/O（复用共享 `BinaryArchive`），以及未来的 Transcript、KZG 打开和验证逻辑；
+- `common/`：协议类型、公共 API、SHA3-256 Transcript、验证逻辑、后端选择，以及复用共享 `BinaryArchive` 的产物 I/O；
 - `backends/cpu`：基于 libff/libfqfft 的参考后端；
 - `backends/cuda` 和 `backends/hip`：建立在顶层公共算子之上的轻量协议适配层。
 
 原有的 Rust CPU/CUDA 代码已删除。它们基于不同的软件栈，实现的是另一种带查找功能的四线协议，因此不会作为当前框架的实现基础。
 
-当前已实现三线算术化 Manager、CPU Setup、基于共享 `BinaryArchive` 的产物序列化，以及 `plonk-gen` 与 `plonk-setup` 两个命令行程序。Prove 和 Verify 尚未实现，`plonk-prove` 与 `plonk-verify` 仍以状态码 2 退出。低层协议文档见 `docs/plonk_protocol_low_level.pdf`。
+当前已实现三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、基于共享 `BinaryArchive` 的产物序列化，以及完整的 `plonk-gen/setup/prove/verify` 命令行流程。低层协议文档见 `docs/plonk_protocol_low_level.pdf`。
 
 ## Plonkish 算术化 Manager
 
@@ -50,6 +50,16 @@ CPU Setup 单元测试使用已知 `tau` 临时构造 SRS，仅用于验证承�
 make plonk-test-cpu-setup
 ```
 
+## Transcript、CPU Prove 与 Verify
+
+`common/include/plonk/transcript.hpp` 实现 SHA3-256 Fiat–Shamir Transcript。其状态更新参考 [Lambdaworks Transcript Strategy](https://lambdaclass.github.io/lambdaworks/plonk/implementation.html#transcript-strategy)：新消息追加到既有状态之前，`challenge()` 对当前状态求摘要，并用该摘要重置状态。初始化时先吸收域分离标签、N、验证密钥中的八个电路承诺和完整公开输入列，避免弱 Fiat–Shamir。
+
+CPU Prove 按 PDF 的五轮流程实现 wire 盲化承诺、置换累积多项式、扩展陪集上的商多项式、随机点求值、线性化与两个 KZG 打开。Verify 重建同一 Transcript，检查商多项式标量恒等式，并验证 `zeta` 与 `zeta·omega` 两个 KZG pairing 等式。负向测试覆盖被修改的求值、打开证明、公开输入和验证密钥：
+
+```bash
+make plonk-test-cpu-prove-verify
+```
+
 ## 产物序列化与命令行
 
 `common/src/io.cpp` 提供 `circuit`、`witness`、`srs`、`proving-key`、`verification-key`、`proof` 的读写，复用共享的 `BinaryArchive`（见 `common/include/binary_archive.hpp`）。文件以魔数 `LKZ1` 和版本号开头，向量带字节长度前缀；元素按原始内存布局读写，因此要求读写程序使用兼容的 ABI、依赖版本与构建配置。该格式用于本项目程序之间传递产物，不承诺规范化的跨实现编码。
@@ -64,10 +74,14 @@ PLONK_DATA=build/groth16/plonk-data
 
 "$PLONK_BIN/plonk-gen" --path "$PLONK_DATA" matmul 2
 "$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" matmul_2.bin
+"$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" matmul_2.bin
+"$PLONK_BIN/plonk-verify" --path "$PLONK_DATA" matmul_2.bin
 
 "$PLONK_BIN/plonk-gen" --path "$PLONK_DATA" fibonacci 10
 "$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" \
   --srs matmul_2.srs.bin fibonacci_10.bin
+"$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" fibonacci_10.bin
+"$PLONK_BIN/plonk-verify" --path "$PLONK_DATA" fibonacci_10.bin
 ```
 
 自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。快速回归仍可执行 `make plonk-test-cpu`。

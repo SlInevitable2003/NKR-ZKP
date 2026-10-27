@@ -287,7 +287,23 @@ Proof read_proof(const std::filesystem::path &path)
     BinaryArchive archive;
     archive.open_for_read(path.string());
     Proof proof;
-    archive.read(proof.encoded);
+    archive.read(proof.a_commitment);
+    archive.read(proof.b_commitment);
+    archive.read(proof.c_commitment);
+    archive.read(proof.z_commitment);
+    archive.read(proof.t_lo_commitment);
+    archive.read(proof.t_mid_commitment);
+    archive.read(proof.t_hi_commitment);
+    archive.read(proof.a_zeta);
+    archive.read(proof.b_zeta);
+    archive.read(proof.c_zeta);
+    archive.read(proof.sigma_1_zeta);
+    archive.read(proof.sigma_2_zeta);
+    archive.read(proof.z_zeta_omega);
+    archive.read(proof.p_non_constant_zeta);
+    archive.read(proof.t_zeta);
+    archive.read(proof.w_zeta);
+    archive.read(proof.w_zeta_omega);
     return proof;
 }
 
@@ -295,7 +311,23 @@ void write_proof(const std::filesystem::path &path, const Proof &proof)
 {
     BinaryArchive archive;
     archive.open_for_write(path.string());
-    archive.write(proof.encoded);
+    archive.write(proof.a_commitment);
+    archive.write(proof.b_commitment);
+    archive.write(proof.c_commitment);
+    archive.write(proof.z_commitment);
+    archive.write(proof.t_lo_commitment);
+    archive.write(proof.t_mid_commitment);
+    archive.write(proof.t_hi_commitment);
+    archive.write(proof.a_zeta);
+    archive.write(proof.b_zeta);
+    archive.write(proof.c_zeta);
+    archive.write(proof.sigma_1_zeta);
+    archive.write(proof.sigma_2_zeta);
+    archive.write(proof.z_zeta_omega);
+    archive.write(proof.p_non_constant_zeta);
+    archive.write(proof.t_zeta);
+    archive.write(proof.w_zeta);
+    archive.write(proof.w_zeta_omega);
 }
 
 } // namespace nkr::plonk

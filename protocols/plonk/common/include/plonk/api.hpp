@@ -5,4 +5,5 @@
 #include "plonk/io.hpp"
 #include "plonk/profile.hpp"
 #include "plonk/protocol.hpp"
+#include "plonk/transcript.hpp"
 #include "plonk/types.hpp"

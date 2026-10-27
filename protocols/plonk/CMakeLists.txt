@@ -8,7 +8,8 @@ add_library(nkr_plonk_common STATIC
     common/src/backend_registry.cpp
     common/src/io.cpp
     common/src/profile.cpp
-    common/src/protocol.cpp)
+    common/src/protocol.cpp
+    common/src/transcript.cpp)
 target_compile_features(nkr_plonk_common PUBLIC cxx_std_17)
 target_include_directories(nkr_plonk_common PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/common/include"
@@ -26,6 +27,10 @@ target_link_libraries(plonk-arithmetization-test PRIVATE nkr_plonk_common)
 add_executable(plonk-cpu-setup-test EXCLUDE_FROM_ALL
     tests/cpu_setup_test.cpp)
 target_link_libraries(plonk-cpu-setup-test PRIVATE nkr_plonk_cpu)
+
+add_executable(plonk-cpu-prove-verify-test EXCLUDE_FROM_ALL
+    tests/cpu_prove_verify_test.cpp)
+target_link_libraries(plonk-cpu-prove-verify-test PRIVATE nkr_plonk_cpu)
 
 set(NKR_ZKP_PLONK_ACCELERATOR_TARGET "")
 if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")

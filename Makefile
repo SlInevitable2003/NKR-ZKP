@@ -20,7 +20,7 @@ LIGHTZK_DEPS_DIR ?= $(CURDIR)/third_party/lightzk/depends
 PROFILE_FLAG = $(if $(filter 1 true yes on,$(PROFILE)),--profile,)
 HIP_ARCH_FLAG = $(if $(strip $(HIP_ARCH)),-DCMAKE_HIP_ARCHITECTURES=$(HIP_ARCH),)
 
-.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-clean plonk-cpu plonk-scaffold plonk-test-cpu plonk-test-arithmetization plonk-test-cpu-setup stark stark-matmul clean
+.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-clean plonk-cpu plonk-scaffold plonk-test-cpu plonk-test-arithmetization plonk-test-cpu-setup plonk-test-cpu-prove-verify stark stark-matmul clean
 
 help:
 	@echo "NKR-ZKP targets:"
@@ -33,9 +33,10 @@ help:
 	@echo "  groth16-test-hip   run a HIP setup/prove/verify flow"
 	@echo "  groth16-clean  remove all Groth16 CMake build trees"
 	@echo "  plonk-cpu      configure and build PLONK with the CPU backend"
-	@echo "  plonk-test-cpu run PLONK gen and CPU setup with a small matmul circuit"
+	@echo "  plonk-test-cpu run PLONK gen/setup/prove/verify with a small matmul circuit"
 	@echo "  plonk-test-arithmetization  build and test the PLONK circuit manager"
 	@echo "  plonk-test-cpu-setup  build and test PLONK CPU Setup"
+	@echo "  plonk-test-cpu-prove-verify  build and test PLONK CPU Prove/Verify"
 	@echo "  stark          build Winterfell with concurrent CPU support"
 	@echo "  stark-matmul   run the Winterfell matrix multiplication example"
 
@@ -113,6 +114,8 @@ plonk-scaffold: plonk-cpu
 plonk-test-cpu: plonk-cpu
 	$(PLONK_BIN_DIR)/plonk-gen matmul 2
 	$(PLONK_BIN_DIR)/plonk-setup --backend cpu matmul_2.bin
+	$(PLONK_BIN_DIR)/plonk-prove --backend cpu matmul_2.bin
+	$(PLONK_BIN_DIR)/plonk-verify matmul_2.bin
 
 plonk-test-arithmetization: groth16-cpu
 	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS) \
@@ -123,6 +126,11 @@ plonk-test-cpu-setup: groth16-cpu
 	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS) \
 		--target plonk-cpu-setup-test
 	$(GROTH16_BUILD_DIR)/protocols/plonk/plonk-cpu-setup-test
+
+plonk-test-cpu-prove-verify: groth16-cpu
+	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS) \
+		--target plonk-cpu-prove-verify-test
+	$(GROTH16_BUILD_DIR)/protocols/plonk/plonk-cpu-prove-verify-test
 
 stark:
 	RAYON_NUM_THREADS=$(THREADS) cargo build --release \
