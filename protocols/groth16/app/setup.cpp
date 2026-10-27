@@ -17,7 +17,7 @@ using namespace nkr::groth16;
 static void usage(const char *program)
 {
     std::cerr << "Usage: " << program
-              << " [--backend cpu|cuda|dcu] [--path <dir>] [--profile] <r1cs-file>\n";
+              << " [--backend cpu|cuda|hip] [--path <dir>] [--profile] <r1cs-file>\n";
     std::exit(2);
 }
 

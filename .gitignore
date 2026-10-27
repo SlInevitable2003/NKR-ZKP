@@ -23,9 +23,10 @@ compile_commands.json
 *.swp
 
 # Local dependency checkouts and benchmark output
-/third_party/
+/third_party/*
+!/third_party/lightzk/
+!/third_party/lightzk/**
 /artifacts/
 
 # OS files
 .DS_Store
-

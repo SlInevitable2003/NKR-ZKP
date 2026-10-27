@@ -29,12 +29,11 @@ std::unique_ptr<Backend> make_cpu_backend();
 
 #if defined(NKR_GROTH16_ACCELERATOR_CUDA)
 std::unique_ptr<Backend> make_cuda_backend();
-#elif defined(NKR_GROTH16_ACCELERATOR_DCU)
-std::unique_ptr<Backend> make_dcu_backend();
+#elif defined(NKR_GROTH16_ACCELERATOR_HIP)
+std::unique_ptr<Backend> make_hip_backend();
 #endif
 
 std::unique_ptr<Backend> make_backend(const std::string &name);
 std::vector<std::string> available_backends();
 
 } // namespace nkr::groth16
-

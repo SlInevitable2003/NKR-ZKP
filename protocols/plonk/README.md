@@ -1,9 +1,18 @@
 # PLONK
 
-当前保留两个来源快照：
+This directory is the C++ scaffold for a BN254, KZG-based PLONK
+implementation. Its layering intentionally matches Groth16:
 
-- `implementations/cpu`：纯 CPU 基线；
-- `implementations/cuda`：修改过协议核心、`ark-poly-commit` 和 MSM/FFT 路径的 CUDA 实验版本。
+- `app/`: platform-independent `gen/setup/prove/verify` entry points;
+- `common/`: protocol types, public API, backend selection, and eventually
+  transcript, canonical I/O, KZG, and verification;
+- `backends/cpu`: libff/libfqfft reference backend;
+- `backends/cuda` and `backends/hip`: thin protocol adapters over the shared
+  top-level operators.
 
-它们暂不组成同一个 Cargo workspace，避免不同锁文件、工具链和同名 package 相互污染。待 CPU 测试向量固定后，将以 CPU 版本作为协议公共层，把 CUDA 目录中的加速部分迁移为 feature-gated backend。
+The previous Rust CPU/CUDA snapshots have been removed. They implemented a
+different four-wire, lookup-enabled protocol over a different software stack
+and are not the implementation base for this scaffold.
 
+The targets currently compile but deliberately return exit status 2 with a
+"scaffold only" message. No PLONK proof semantics are implemented yet.

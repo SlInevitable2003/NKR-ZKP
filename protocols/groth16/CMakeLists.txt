@@ -1,7 +1,5 @@
-set(NKR_ZKP_GROTH16_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/depends" CACHE PATH
-    "Path to the vendored lightZK depends directory containing libsnark and cgbn")
-if(NOT IS_DIRECTORY "${NKR_ZKP_GROTH16_DEPS_DIR}/libsnark")
-    message(FATAL_ERROR "Groth16 dependencies not found at ${NKR_ZKP_GROTH16_DEPS_DIR}")
+if(NOT IS_DIRECTORY "${NKR_ZKP_LIGHTZK_DEPS_DIR}/libsnark")
+    message(FATAL_ERROR "lightZK dependencies not found at ${NKR_ZKP_LIGHTZK_DEPS_DIR}")
 endif()
 
 set(NKR_ZKP_GROTH16_BIN_DIR "${CMAKE_BINARY_DIR}/bin" CACHE PATH
@@ -26,7 +24,7 @@ message(STATUS "libff architecture-specific assembly: ${USE_ASM} (${CMAKE_SYSTEM
 # ALT_BN128 production path. Force these values so pre-cleanup CMake caches
 # cannot re-enable source trees that are no longer shipped.
 set(CURVE "ALT_BN128" CACHE STRING "libsnark curve used by NKR-ZKP" FORCE)
-set(DEPENDS_DIR "${NKR_ZKP_GROTH16_DEPS_DIR}/libsnark/depends" CACHE PATH
+set(DEPENDS_DIR "${NKR_ZKP_LIGHTZK_DEPS_DIR}/libsnark/depends" CACHE PATH
     "Vendored libsnark dependency directory" FORCE)
 set(WITH_SUPERCOP OFF CACHE BOOL "ADSNARK/SUPERCOP is not vendored" FORCE)
 set(WITH_PROCPS OFF CACHE BOOL "Disable optional libsnark memory profiling" FORCE)
@@ -35,7 +33,7 @@ set(NKR_ZKP_BUILD_LIBSNARK_AUXILIARY OFF CACHE BOOL
 
 find_package(OpenMP REQUIRED)
 add_subdirectory(
-    "${NKR_ZKP_GROTH16_DEPS_DIR}/libsnark"
+    "${NKR_ZKP_LIGHTZK_DEPS_DIR}/libsnark"
     "${CMAKE_CURRENT_BINARY_DIR}/depends/libsnark")
 
 add_library(nkr_groth16_common STATIC
@@ -46,7 +44,7 @@ add_library(nkr_groth16_common STATIC
 target_compile_features(nkr_groth16_common PUBLIC cxx_std_17)
 target_include_directories(nkr_groth16_common PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/common/include"
-    "${NKR_ZKP_GROTH16_DEPS_DIR}/libsnark")
+    "${NKR_ZKP_LIGHTZK_DEPS_DIR}/libsnark")
 target_compile_definitions(nkr_groth16_common PUBLIC CURVE_ALT_BN128)
 target_link_libraries(nkr_groth16_common PUBLIC snark OpenMP::OpenMP_CXX)
 
@@ -54,22 +52,21 @@ add_library(nkr_groth16_cpu STATIC backends/cpu/src/backend.cpp)
 target_link_libraries(nkr_groth16_cpu PUBLIC nkr_groth16_common)
 
 set(NKR_ZKP_GROTH16_ACCELERATOR_TARGET "")
-if(NKR_ZKP_GROTH16_ACCELERATOR STREQUAL "CUDA")
-    enable_language(CUDA)
-    if(NOT CMAKE_CUDA_ARCHITECTURES)
-        set(CMAKE_CUDA_ARCHITECTURES 120)
-    endif()
+if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")
+    add_subdirectory("${PROJECT_SOURCE_DIR}/operators/cuda"
+        "${CMAKE_CURRENT_BINARY_DIR}/operators/cuda")
     add_subdirectory(backends/cuda)
     set(NKR_ZKP_GROTH16_ACCELERATOR_TARGET nkr_groth16_cuda)
     target_compile_definitions(nkr_groth16_common PRIVATE NKR_GROTH16_ACCELERATOR_CUDA=1)
-elseif(NKR_ZKP_GROTH16_ACCELERATOR STREQUAL "DCU")
-    enable_language(HIP)
-    add_subdirectory(backends/dcu)
-    set(NKR_ZKP_GROTH16_ACCELERATOR_TARGET nkr_groth16_dcu)
-    target_compile_definitions(nkr_groth16_common PRIVATE NKR_GROTH16_ACCELERATOR_DCU=1)
-elseif(NOT NKR_ZKP_GROTH16_ACCELERATOR STREQUAL "NONE")
+elseif(NKR_ZKP_ACCELERATOR STREQUAL "HIP")
+    add_subdirectory("${PROJECT_SOURCE_DIR}/operators/hip"
+        "${CMAKE_CURRENT_BINARY_DIR}/operators/hip")
+    add_subdirectory(backends/hip)
+    set(NKR_ZKP_GROTH16_ACCELERATOR_TARGET nkr_groth16_hip)
+    target_compile_definitions(nkr_groth16_common PRIVATE NKR_GROTH16_ACCELERATOR_HIP=1)
+elseif(NOT NKR_ZKP_ACCELERATOR STREQUAL "NONE")
     message(FATAL_ERROR
-        "Unsupported Groth16 accelerator: ${NKR_ZKP_GROTH16_ACCELERATOR}")
+        "Unsupported accelerator: ${NKR_ZKP_ACCELERATOR}")
 endif()
 
 foreach(app gen verify)
@@ -91,6 +88,6 @@ foreach(app setup prove)
         APP_DATA_DIR="${NKR_ZKP_GROTH16_DATA_DIR}")
 endforeach()
 
-if(NKR_ZKP_GROTH16_ACCELERATOR STREQUAL "CUDA")
+if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")
     set_target_properties(groth16-setup groth16-prove PROPERTIES LINKER_LANGUAGE CUDA)
 endif()

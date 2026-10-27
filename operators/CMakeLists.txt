@@ -1,0 +1,2 @@
+add_library(nkr_operators_common INTERFACE)
+target_compile_features(nkr_operators_common INTERFACE cxx_std_17)

@@ -1,14 +1,13 @@
 add_library(nkr_groth16_cuda STATIC
     src/api.cu
-    src/utils.cu
     src/groth16_backend.cu)
 target_compile_features(nkr_groth16_cuda PUBLIC cxx_std_17 cuda_std_17)
 target_compile_options(nkr_groth16_cuda PRIVATE
     $<$<COMPILE_LANGUAGE:CUDA>:-O2 --extended-lambda -lineinfo>)
 target_include_directories(nkr_groth16_cuda PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-    "${NKR_ZKP_GROTH16_DEPS_DIR}/cgbn")
-target_link_libraries(nkr_groth16_cuda PUBLIC nkr_groth16_common)
+    "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_link_libraries(nkr_groth16_cuda PUBLIC
+    nkr_groth16_common nkr_operators_cuda)
 target_compile_definitions(nkr_groth16_cuda PUBLIC CURVE_ALT_BN128)
 set_target_properties(nkr_groth16_cuda PROPERTIES
     POSITION_INDEPENDENT_CODE ON)
