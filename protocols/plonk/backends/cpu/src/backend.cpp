@@ -15,11 +15,6 @@
 namespace nkr::plonk {
 namespace {
 
-bool is_power_of_two(const std::size_t value)
-{
-    return value != 0 && (value & (value - 1)) == 0;
-}
-
 std::size_t next_power_of_two(const std::size_t value)
 {
     if (value == 0) {
@@ -34,76 +29,6 @@ std::size_t next_power_of_two(const std::size_t value)
         result <<= 1;
     }
     return result;
-}
-
-void require_size(const std::size_t actual,
-                  const std::size_t expected,
-                  const char *name)
-{
-    if (actual != expected) {
-        throw std::invalid_argument(
-            "PLONK Setup: " + std::string(name) + " must contain exactly " +
-            std::to_string(expected) + " entries");
-    }
-}
-
-void validate_circuit(const Circuit &circuit)
-{
-    const std::size_t n = circuit.domain_size;
-    if (!is_power_of_two(n)) {
-        throw std::invalid_argument("PLONK Setup: domain size must be a non-zero power of two");
-    }
-    if (circuit.rows > n) {
-        throw std::invalid_argument("PLONK Setup: circuit row count exceeds the domain size");
-    }
-    if (circuit.public_inputs > circuit.rows) {
-        throw std::invalid_argument("PLONK Setup: public input count exceeds the circuit row count");
-    }
-
-    require_size(circuit.q_l.size(), n, "q_l");
-    require_size(circuit.q_r.size(), n, "q_r");
-    require_size(circuit.q_m.size(), n, "q_m");
-    require_size(circuit.q_o.size(), n, "q_o");
-    require_size(circuit.q_c.size(), n, "q_c");
-    require_size(circuit.sigma_1.size(), n, "sigma_1");
-    require_size(circuit.sigma_2.size(), n, "sigma_2");
-    require_size(circuit.sigma_3.size(), n, "sigma_3");
-
-    if (n > std::numeric_limits<std::uint32_t>::max() / 3) {
-        throw std::invalid_argument("PLONK Setup: encoded permutation does not fit in uint32_t");
-    }
-
-    std::vector<bool> seen(3 * n, false);
-    const std::array<const std::vector<std::uint32_t> *, 3> sigma = {
-        &circuit.sigma_1, &circuit.sigma_2, &circuit.sigma_3};
-    for (const auto *column : sigma) {
-        for (const std::uint32_t destination : *column) {
-            if (destination >= 3 * n) {
-                throw std::invalid_argument("PLONK Setup: permutation cell is outside the circuit");
-            }
-            if (seen[destination]) {
-                throw std::invalid_argument("PLONK Setup: wiring map is not a permutation");
-            }
-            seen[destination] = true;
-        }
-    }
-}
-
-void validate_srs(const UniversalSrs &srs, const std::size_t n)
-{
-    if (srs.g1_powers.size() < n + 3) {
-        throw std::invalid_argument(
-            "PLONK Setup: SRS must contain powers [tau^0] through [tau^(N+2)]");
-    }
-    for (std::size_t i = 0; i < n + 3; ++i) {
-        if (srs.g1_powers[i].is_zero() || !srs.g1_powers[i].is_well_formed()) {
-            throw std::invalid_argument("PLONK Setup: SRS contains an invalid G1 power");
-        }
-    }
-    if (srs.g2.is_zero() || srs.tau_g2.is_zero() ||
-        !srs.g2.is_well_formed() || !srs.tau_g2.is_well_formed()) {
-        throw std::invalid_argument("PLONK Setup: SRS contains an invalid G2 point");
-    }
 }
 
 std::pair<Scalar, Scalar> choose_wire_cosets(const std::size_t n)
@@ -200,9 +125,7 @@ public:
                ProvingKey &proving_key,
                VerificationKey &verification_key) override
     {
-        validate_circuit(circuit);
         const std::size_t n = circuit.domain_size;
-        validate_srs(srs, n);
         if (n > (std::numeric_limits<std::size_t>::max() - 6) / 3) {
             throw std::invalid_argument("PLONK Setup: quotient domain size overflows size_t");
         }

@@ -8,7 +8,7 @@
 #include "libff/common/profiling.hpp"
 #include "libsnark/common/default_types/r1cs_ppzksnark_pp.hpp"
 
-#include "binary_archive.hpp"
+#include "groth16/io.hpp"
 #include "groth16/profile.hpp"
 #include "r1cs/r1cs.hpp"
 
@@ -21,21 +21,16 @@ using FieldT = libff::Fr<ppT>;
 #define APP_DATA_DIR "app/data"
 #endif
 
-template <typename S>
-struct CircuitOutput {
-    size_t k; // 公共输入 x 的规模
-    CsrMatrix<S> A, B, C;
-    vector<S> z; // z = 1 || x || w
-};
-
-template <typename S>
-static void finalize_circuit(R1CSManager<S> &mgr, const map<size_t, S> &assignment, CircuitOutput<S> &out)
+static void finalize_circuit(R1CSManager<FieldT> &mgr,
+                             const map<size_t, FieldT> &assignment,
+                             nkr::groth16::Circuit &out,
+                             vector<FieldT> &z)
 {
-    mgr.gen_spmat(out.A, out.B, out.C, true); // 填充到最近的 2 的幂次，使得 A/B/C 形如 (1+2^r) * 2^s
-    out.k = mgr.num_public();
-    out.z.assign(out.A.num_cols, S::zero());
-    out.z[0] = S::one();
-    for (const auto &[id, val] : assignment) out.z[mgr.dense_index(id)] = val;
+    mgr.gen_spmat(out.a, out.b, out.c, true); // 填充到最近的 2 的幂次，使得 A/B/C 形如 (1+2^r) * 2^s
+    out.public_inputs = mgr.num_public();
+    z.assign(out.a.num_cols, FieldT::zero());
+    z[0] = FieldT::one();
+    for (const auto &[id, val] : assignment) z[mgr.dense_index(id)] = val;
 }
 
 static void build_matmul(R1CSManager<FieldT> &mgr, map<size_t, FieldT> &assignment, size_t s)
@@ -123,41 +118,32 @@ int main(int argc, char *argv[]) {
         usage(argv[0]);
     }
 
-    CircuitOutput<FieldT> out;
+    nkr::groth16::Circuit out;
+    vector<FieldT> z;
     {
         nkr::groth16::ProfileScope stage("groth16.gen.finalize_circuit");
-        finalize_circuit(mgr, assignment, out);
+        finalize_circuit(mgr, assignment, out, z);
     }
 
-    printf("* R1CS constraints: %zu\n", out.A.num_rows);
-    printf("* R1CS variables:   %zu (public: %zu, private: %zu)\n", out.A.num_cols, out.k, out.A.num_cols - 1 - out.k);
+    printf("* R1CS constraints: %zu\n", out.a.num_rows);
+    printf("* R1CS variables:   %zu (public: %zu, private: %zu)\n",
+           out.a.num_cols, out.public_inputs, out.a.num_cols - 1 - out.public_inputs);
 
     const string data_dir = APP_DATA_DIR;
     std::filesystem::create_directories(data_dir);
-    const string r1cs_path = data_dir + "/" + stem + ".bin";
-    const string witness_path = data_dir + "/" + stem + ".witness.bin";
+    const auto paths = nkr::groth16::artifact_paths(std::filesystem::path(data_dir), stem);
 
     {
         nkr::groth16::ProfileScope stage("groth16.gen.write_circuit");
-        BinaryArchive ar;
-        ar.open_for_write(r1cs_path);
-        ar.write(out.k);
-        ar.write(out.A.num_cols);
-        ar.write(out.A.row_ptr); ar.write(out.A.col_idx); ar.write(out.A.values);
-        ar.write(out.B.row_ptr); ar.write(out.B.col_idx); ar.write(out.B.values);
-        ar.write(out.C.row_ptr); ar.write(out.C.col_idx); ar.write(out.C.values);
-        ar.close();
+        nkr::groth16::write_circuit(paths.r1cs, out);
     }
-    cout << "Wrote R1CS to " << r1cs_path << endl;
+    cout << "Wrote R1CS to " << paths.r1cs << endl;
 
     {
         nkr::groth16::ProfileScope stage("groth16.gen.write_witness");
-        BinaryArchive war;
-        war.open_for_write(witness_path);
-        war.write(out.z);
-        war.close();
+        nkr::groth16::write_witness(paths.witness, z);
     }
-    cout << "Wrote witness to " << witness_path << endl;
+    cout << "Wrote witness to " << paths.witness << endl;
 
     return 0;
 }

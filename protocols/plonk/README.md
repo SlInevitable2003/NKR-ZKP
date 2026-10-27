@@ -3,7 +3,7 @@
 本目录是基于 BN254 和 KZG 的 PLONK C++ 实现框架，其分层有意与 Groth16 保持一致：
 
 - `app/`：与平台无关的 `gen/setup/prove/verify` 入口；
-- `common/`：协议类型、公共 API、后端选择、规范化 I/O，以及未来的 Transcript、KZG 打开和验证逻辑；
+- `common/`：协议类型、公共 API、后端选择、产物 I/O（复用共享 `BinaryArchive`），以及未来的 Transcript、KZG 打开和验证逻辑；
 - `backends/cpu`：基于 libff/libfqfft 的参考后端；
 - `backends/cuda` 和 `backends/hip`：建立在顶层公共算子之上的轻量协议适配层。
 
@@ -52,7 +52,7 @@ make plonk-test-cpu-setup
 
 ## 产物序列化与命令行
 
-`common/src/io.cpp` 提供 `circuit`、`witness`、`srs`、`proving-key`、`verification-key`、`proof` 的规范化读写。文件以魔数 `NKRPLK1`、版本号和类型标记开头，标量与群元素以十进制文本编码，避免把 libff 或设备内存布局当作跨平台格式。
+`common/src/io.cpp` 提供 `circuit`、`witness`、`srs`、`proving-key`、`verification-key`、`proof` 的读写，复用共享的 `BinaryArchive`（见 `common/include/binary_archive.hpp`）。文件以魔数 `LKZ1` 和版本号开头，向量带字节长度前缀；元素按原始内存布局读写，因此要求可平凡复制类型。
 
 `plonk-gen` 目前支持 `matmul` 与 `fibonacci` 两种用例；`plonk-setup` 在未提供 `--srs` 时现场生成 SRS。完整的 CPU 流程可用：
 

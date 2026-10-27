@@ -7,11 +7,13 @@
 #include <type_traits>
 #include <vector>
 
-// Minimal host-side binary archive for cache / reference files.
+// Shared host-side binary archive for protocol artifacts (Groth16 and PLONK).
 //
 // Files start with a magic number and a version, so incompatible or truncated
 // files are detected eagerly instead of being silently misread.  Each vector is
 // written with a byte-length prefix and is resized automatically on read.
+// Element types must be trivially copyable: this is a raw in-memory layout, not
+// a canonical cross-platform encoding.
 class BinaryArchive {
     std::fstream fs;
     uint64_t max_vector_bytes = uint64_t{1} << 30;

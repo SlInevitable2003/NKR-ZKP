@@ -46,7 +46,7 @@ target_include_directories(nkr_groth16_common PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/common/include"
     "${NKR_ZKP_LIGHTZK_DEPS_DIR}/libsnark")
 target_compile_definitions(nkr_groth16_common PUBLIC CURVE_ALT_BN128)
-target_link_libraries(nkr_groth16_common PUBLIC snark OpenMP::OpenMP_CXX)
+target_link_libraries(nkr_groth16_common PUBLIC nkr_common snark OpenMP::OpenMP_CXX)
 
 add_library(nkr_groth16_cpu STATIC backends/cpu/src/backend.cpp)
 target_link_libraries(nkr_groth16_cpu PUBLIC nkr_groth16_common)

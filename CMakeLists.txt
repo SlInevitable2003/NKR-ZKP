@@ -23,6 +23,7 @@ elseif(NOT NKR_ZKP_ACCELERATOR STREQUAL "NONE")
     message(FATAL_ERROR "Unsupported accelerator: ${NKR_ZKP_ACCELERATOR}")
 endif()
 
+add_subdirectory(common)
 add_subdirectory(operators)
 add_subdirectory(protocols/groth16)
 add_subdirectory(protocols/plonk)

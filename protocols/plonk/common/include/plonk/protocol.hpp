@@ -1,10 +1,15 @@
 #pragma once
 
+#include <string>
+
 #include "plonk/backend.hpp"
 
 namespace nkr::plonk {
 
 [[noreturn]] void throw_scaffold_only();
+
+bool validate_circuit(const Circuit &circuit, std::string &error);
+bool validate_srs(const UniversalSrs &srs, std::size_t domain_size, std::string &error);
 
 void setup(Backend &backend,
            const Circuit &circuit,
