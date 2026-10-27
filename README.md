@@ -31,39 +31,54 @@ CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各
 - 原有的 Rust PLONK CPU/CUDA 代码已删除。新实现计划以 `docs/plonk_protocol_low_level.pdf` 描述的 BN254、KZG 方案为准。
 - Winterfell 仍作为独立的 Rust CPU 实现保留。
 
-## 构建与测试
+## Groth16 构建与测试
 
-请在仓库根目录执行以下命令：
+Groth16 需要 CMake 3.21 及以上版本、支持 C++17 的编译器和 OpenMP。CUDA 构建还需要 NVIDIA CUDA Toolkit，HIP 构建需要可被 CMake 检测到的 HIP/ROCm 工具链。
+
+以下命令均在仓库根目录执行。“构建”目标只进行配置和编译，“测试”目标会在构建后继续执行 `gen/setup/prove/verify` 端到端流程。
+
+| 后端 | 仅构建 | 构建并运行端到端测试 | 构建中可用的运行时后端 |
+|---|---|---|---|
+| CPU | `make groth16-cpu` | `make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=4` | `cpu` |
+| NVIDIA CUDA | `make groth16-cuda CUDA_ARCH=80` | `make groth16-test-cuda CUDA_ARCH=80 GROTH16_CUDA_MATRIX_SIZE=12` | `cpu`、`cuda` |
+| HIP/ROCm | `make groth16-hip HIP_ARCH=<gfx-arch>` | `make groth16-test-hip HIP_ARCH=<gfx-arch> GROTH16_HIP_MATRIX_SIZE=12` | `cpu`、`hip` |
+
+CUDA 的 `CUDA_ARCH` 必须与目标 GPU 的计算能力匹配，例如 `80` 表示 compute capability 8.0。CUDA 默认从 `/usr/local/cuda` 查找，也可以通过 `CUDA_HOME` 指定：
 
 ```bash
-make help
-make check
-
-# Groth16 CPU 端到端流程
-make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=4
-
-# NVIDIA CUDA；请使用当前 GPU 对应的计算能力
-make groth16-test-cuda CUDA_ARCH=80 GROTH16_CUDA_MATRIX_SIZE=12
-
-# HIP；请使用当前工具链报告的 offload target
-make groth16-test-hip HIP_ARCH=<gfx-arch> GROTH16_HIP_MATRIX_SIZE=12
-
-# 仅构建 PLONK 框架目标（目前不会生成证明）
-make plonk-scaffold
-
-# Winterfell 示例
-make stark-matmul THREADS=4 MATRIX_SIZE=4
+make groth16-cuda CUDA_HOME=/opt/cuda CUDA_ARCH=80
 ```
 
-`groth16-dcu` 和 `groth16-test-dcu` 是兼容性别名，对应规范名称 `groth16-hip`。运行时通过 `--backend cpu|cuda|hip` 选择后端；为了兼容旧用法，也接受 `dcu` 作为别名。
+HIP 构建前应确保 `hipcc` 及对应 ROCm 工具链可被当前环境找到。`HIP_ARCH` 使用目标 GPU 的 offload target，例如工具链报告的 `gfx...` 值：
 
-所有协议共用以下 CMake 加速器选项：
+```bash
+make groth16-hip HIP_ARCH=<gfx-arch>
+```
+
+CPU 后端始终会编译；每个构建目录最多再包含 CUDA 或 HIP 中的一种。为了避免 CMake 缓存互相影响，建议为不同后端使用独立目录：
+
+```bash
+make groth16-cpu  GROTH16_BUILD_DIR=build/groth16-cpu
+make groth16-cuda GROTH16_BUILD_DIR=build/groth16-cuda CUDA_ARCH=80
+make groth16-hip  GROTH16_BUILD_DIR=build/groth16-hip HIP_ARCH=<gfx-arch>
+```
+
+如果复用默认的 `build/groth16`，切换加速器前先执行 `make groth16-clean`。底层对应的 CMake 选项为：
 
 ```text
 -DNKR_ZKP_ACCELERATOR=NONE|CUDA|HIP
 ```
 
-同一个构建目录中只能启用一种加速器工具链，所有配置始终保留 CPU 支持。在 CUDA 和 HIP 之间切换前，需要删除或重新配置共用的 CMake 缓存。
+`groth16-dcu` 和 `groth16-test-dcu` 是 `groth16-hip` 和 `groth16-test-hip` 的兼容性别名。程序运行时通过 `--backend cpu|cuda|hip` 选择后端；`dcu` 也可作为 `hip` 的兼容性名称。
+
+其他项目目标：
+
+```bash
+make help
+make check
+make plonk-scaffold
+make stark-matmul THREADS=4 MATRIX_SIZE=4
+```
 
 ## Groth16 手动运行流程
 
@@ -79,6 +94,30 @@ G16=build/groth16/bin
 ```
 
 添加 `--profile` 可以输出协议层及后端各阶段的耗时。除非另行指定数据目录，生成的电路、见证、密钥和证明文件都存放在 `build/groth16/data`。
+
+### CUDA 手动流程
+
+```bash
+make groth16-cuda GROTH16_BUILD_DIR=build/groth16-cuda CUDA_ARCH=80
+G16=build/groth16-cuda/bin
+"$G16/groth16-gen" matmul 100
+"$G16/groth16-setup" --backend cuda matmul_100.bin
+"$G16/groth16-prove" --backend cuda matmul_100.bin
+"$G16/groth16-verify" matmul_100.bin
+```
+
+### HIP 手动流程
+
+```bash
+make groth16-hip GROTH16_BUILD_DIR=build/groth16-hip HIP_ARCH=<gfx-arch>
+G16=build/groth16-hip/bin
+"$G16/groth16-gen" matmul 100
+"$G16/groth16-setup" --backend hip matmul_100.bin
+"$G16/groth16-prove" --backend hip matmul_100.bin
+"$G16/groth16-verify" matmul_100.bin
+```
+
+`gen` 和 `verify` 属于后端无关的公共层，因此不接收 `--backend`。`setup` 和 `prove` 根据 `--backend` 选择 CPU、CUDA 或 HIP；当前 HIP 的 `setup` 会委托给 CPU 参考实现，HIP 加速用于 `prove`。
 
 ## 分层规则
 
