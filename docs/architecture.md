@@ -52,7 +52,7 @@ Groth16 是外部 `gen/setup/prove/verify` 组织方式的可用参考，但其�
 
 ## PLONK 范围
 
-PLONK 目录目前只是框架。已删除的 Rust 代码基于另一条 BLS12 系列曲线，实现的是带查找功能的四线系统，因此不会作为新实现的基础。计划中的首个实现范围为：
+PLONK 已实现独立的三线算术化 Manager 和 CPU Setup 内存 API；Prove、Verify、规范化文件 I/O 及加速器语义仍是框架。已删除的 Rust 代码基于另一条 BLS12 系列曲线，实现的是带查找功能的四线系统，因此不会作为新实现的基础。首个实现范围为：
 
 - BN254/ALT_BN128；
 - KZG 承诺；

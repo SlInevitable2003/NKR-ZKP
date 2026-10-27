@@ -14,7 +14,7 @@ protocols/
     backends/{cpu,cuda,hip}
   plonk/
     app/                   gen/setup/prove/verify 占位命令行程序
-    common/                公共类型、API 及后端注册框架
+    common/                算术化、协议类型、API 及后端注册
     backends/{cpu,cuda,hip}
   stark/winterfell/
 
@@ -27,7 +27,7 @@ CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各
 ## 当前状态
 
 - Groth16 已有可用的 CPU、CUDA 和 HIP 后端。CPU 后端始终参与构建；配置时可以选择 CUDA 或 HIP 加速后端。
-- PLONK 目前只有 C++ 接口和目录框架。相关目标可以编译，但由于尚未实现协议语义，命令行程序会按设计以状态码 2 退出。
+- PLONK 已有独立的三线 Plonkish 算术化 Manager 和 CPU Setup 内存 API，包括固定多项式 iNTT、KZG 承诺及扩展陪集缓存。Prove、Verify 和规范化文件 I/O 尚未实现，因此命令行程序仍会按设计以状态码 2 退出。
 - 原有的 Rust PLONK CPU/CUDA 代码已删除。新实现计划以 `docs/plonk_protocol_low_level.pdf` 描述的 BN254、KZG 方案为准。
 - Winterfell 仍作为独立的 Rust CPU 实现保留。
 

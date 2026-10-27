@@ -41,13 +41,33 @@ struct UniversalSrs {
     G2 tau_g2;
 };
 
-struct ProvingKey {
-    Circuit circuit;
-    UniversalSrs srs;
+struct DomainParameters {
+    std::size_t domain_size = 0;
+    std::size_t quotient_domain_size = 0;
+    Scalar omega = Scalar::zero();
+    Scalar k_1 = Scalar::zero();
+    Scalar k_2 = Scalar::zero();
+    Scalar coset_shift = Scalar::zero();
 };
 
-struct VerificationKey {
-    std::size_t domain_size = 0;
+struct PolynomialData {
+    std::vector<Scalar> evaluations;       // values on H
+    std::vector<Scalar> coefficients;      // monomial coefficients
+    std::vector<Scalar> coset_evaluations; // values on coset_shift * H_M
+};
+
+struct FixedPolynomials {
+    PolynomialData q_l;
+    PolynomialData q_r;
+    PolynomialData q_m;
+    PolynomialData q_o;
+    PolynomialData q_c;
+    PolynomialData sigma_1;
+    PolynomialData sigma_2;
+    PolynomialData sigma_3;
+};
+
+struct CircuitCommitments {
     G1 q_l;
     G1 q_r;
     G1 q_m;
@@ -56,6 +76,19 @@ struct VerificationKey {
     G1 sigma_1;
     G1 sigma_2;
     G1 sigma_3;
+};
+
+struct ProvingKey {
+    Circuit circuit;
+    DomainParameters domain;
+    FixedPolynomials fixed;
+    CircuitCommitments commitments;
+    UniversalSrs srs;
+};
+
+struct VerificationKey {
+    DomainParameters domain;
+    CircuitCommitments commitments;
     G2 g2;
     G2 tau_g2;
 };

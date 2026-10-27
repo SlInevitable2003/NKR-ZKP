@@ -9,7 +9,7 @@
 
 原有的 Rust CPU/CUDA 代码已删除。它们基于不同的软件栈，实现的是另一种带查找功能的四线协议，因此不会作为当前框架的实现基础。
 
-当前命令行程序可以编译，但仍会明确输出“仅为框架”的提示并以状态码 2 退出。现阶段尚未实现 Setup、Prove 和 Verify。
+当前已实现 CPU Setup 的内存 API；命令行程序仍缺少 SRS/密钥的规范化序列化，因此 `plonk-setup` 暂时仍会输出“仅为框架”的提示并以状态码 2 退出。Prove 和 Verify 尚未实现。
 
 ## Plonkish 算术化 Manager
 
@@ -33,4 +33,21 @@ qL·a + qR·b + qM·a·b + qO·c + qC + PI = 0
 make plonk-test-arithmetization
 ```
 
-CPU Setup、产物序列化以及 `plonk-gen` 的文件输出仍待实现。
+## CPU Setup
+
+`backends/cpu` 已实现经典三线 PLONK 的预处理阶段：
+
+- 检查计算域、选择器、复制置换和 SRS 次数上限；
+- 选择互不相交的 `H`、`k1·H`、`k2·H`，并把线槽置换编码为三个置换多项式；
+- 对五个选择器和三个置换多项式分别执行 N 点 iNTT；
+- 使用单项式形式 SRS 完成八次 KZG MSM 承诺；
+- 在 `M = next_power_of_two(3N + 6)` 的陪集域上缓存八个固定多项式的点值；
+- 分别生成包含固定多项式数据的 Proving Key 和精简的 Verification Key。
+
+CPU Setup 单元测试使用已知 `tau` 临时构造 SRS，仅用于验证承诺结果，不能用于生产环境：
+
+```bash
+make plonk-test-cpu-setup
+```
+
+SRS/密钥产物序列化以及 `plonk-gen` 的文件输出仍待实现。

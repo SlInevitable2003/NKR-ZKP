@@ -19,6 +19,10 @@ add_executable(plonk-arithmetization-test EXCLUDE_FROM_ALL
     tests/arithmetization_test.cpp)
 target_link_libraries(plonk-arithmetization-test PRIVATE nkr_plonk_common)
 
+add_executable(plonk-cpu-setup-test EXCLUDE_FROM_ALL
+    tests/cpu_setup_test.cpp)
+target_link_libraries(plonk-cpu-setup-test PRIVATE nkr_plonk_cpu)
+
 set(NKR_ZKP_PLONK_ACCELERATOR_TARGET "")
 if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")
     add_subdirectory(backends/cuda)
