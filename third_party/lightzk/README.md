@@ -1,25 +1,15 @@
-# Vendored LightZK dependencies
+# 内置的 LightZK 依赖
 
-`depends/` is a source snapshot copied from `/home/slinevit2003/lightZK/depends`
-on 2026-10-12. It is intentionally committed directly into NKR-ZKP rather than
-referenced as a Git submodule.
+`depends/` 是 2026-10-12 从 `/home/slinevit2003/lightZK/depends` 复制的源码快照。它有意直接提交到 NKR-ZKP，而不是作为 Git 子模块引用。
 
-The snapshot includes the source trees shared by NKR-ZKP's BN254 protocol implementations:
+该快照包含 NKR-ZKP 的 BN254 协议实现所共用的源码：
 
-- libsnark and the required libff/libfqfft sources;
-- NVIDIA CGBN headers;
-- local, previously uncommitted changes from the source checkout.
+- libsnark 及所需的 libff/libfqfft 源码；
+- NVIDIA CGBN 头文件；
+- 来源工作区中原先尚未提交的本地修改。
 
-In particular, `libff/algebra/fields/bigint.tcc` uses a per-thread
-`std::mt19937_64` generator. This avoids sharing a random generator between
-OpenMP workers and avoids constructing `std::random_device` for every limb.
+其中，`libff/algebra/fields/bigint.tcc` 使用线程独立的 `std::mt19937_64` 生成器，从而避免 OpenMP 工作线程共用随机数生成器，也避免为每个 limb 重复构造 `std::random_device`。
 
-All nested `.git` directories, Git indirection files and `.gitmodules` files
-were removed during import. Updates must be copied as source and reviewed in
-the main NKR-ZKP Git history.
+导入时已删除所有嵌套的 `.git` 目录、Git 间接引用文件和 `.gitmodules` 文件。后续更新必须以源码形式复制，并在 NKR-ZKP 主仓库的 Git 历史中接受评审。
 
-The snapshot is intentionally trimmed for the framework's fixed ALT_BN128
-configuration. Upstream GoogleTest, demos, profiles, tutorials, test vectors,
-ADSNARK/SUPERCOP code, and the legacy BN128 ate-pairing/xbyak backend are not
-vendored. NKR-ZKP's protocol-level integration tests are the maintained test
-surface.
+该快照针对框架固定使用的 ALT_BN128 配置进行了裁剪。上游 GoogleTest、演示程序、性能分析工具、教程、测试向量、ADSNARK/SUPERCOP 代码，以及旧版 BN128 ate-pairing/xbyak 后端均未内置。NKR-ZKP 的协议级集成测试是当前维护的测试入口。

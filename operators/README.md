@@ -1,17 +1,10 @@
-# Shared operators
+# 公共算子层
 
-This directory contains protocol-independent compute primitives shared by
-Groth16 and PLONK. Protocol equations, proof types, transcripts, QAP logic,
-and PLONK permutation/quotient logic do not belong here.
+本目录包含 Groth16 和 PLONK 共用、与具体协议无关的计算原语。协议方程、证明类型、Transcript、QAP 逻辑，以及 PLONK 的置换与商多项式逻辑都不应放在这里。
 
-- `cuda/`: NVIDIA implementations of the BN254 field, curve, NTT, MSM, and
-  device-runtime helpers.
-- `hip/`: HIP implementations of the same operator family.
+- `cuda/`：BN254 域、曲线、NTT、MSM 及设备运行时辅助功能的 NVIDIA 实现。
+- `hip/`：同一组算子的 HIP 实现。
 
-CUDA and HIP deliberately keep separate kernels. They implement the same
-conceptual operator boundary and are tested by protocol-independent vectors,
-but they are not forced through a macro-based common source file.
+CUDA 和 HIP 有意保留各自独立的内核。两者实现相同的抽象算子边界，并使用与协议无关的测试向量进行验证，但不会通过宏强行合并为同一份内核源码。
 
-CPU protocol backends currently use the vendored libff/libfqfft primitives
-directly. A CPU operator facade can be added when more than one protocol has a
-working CPU implementation that benefits from it.
+目前 CPU 协议后端直接使用内置的 libff/libfqfft 原语。待多个协议都具备可用的 CPU 实现、且确实能从统一封装中获益时，再增加 CPU 算子门面。
