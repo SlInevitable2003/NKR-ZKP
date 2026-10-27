@@ -77,6 +77,12 @@ int main(int argc, char **argv)
             ProfileScope stage("plonk.setup.read_circuit");
             circuit = read_circuit(paths.circuit);
         }
+        {
+            ProfileScope stage("plonk.setup.validate_circuit");
+            std::string validation_error;
+            if (!validate_circuit(circuit, validation_error))
+                throw std::runtime_error("invalid circuit: " + validation_error);
+        }
 
         UniversalSrs srs;
         const bool generated_srs = supplied_srs.empty();

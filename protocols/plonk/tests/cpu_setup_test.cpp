@@ -1,6 +1,7 @@
 #include "plonk/arithmetization.hpp"
 #include "plonk/backend.hpp"
 #include "plonk/io.hpp"
+#include "plonk/profile.hpp"
 #include "plonk/protocol.hpp"
 
 #include <array>
@@ -144,6 +145,7 @@ void check_commitments_equal(const CircuitCommitments &lhs,
 int main()
 {
     Curve::init_public_params();
+    configure_profiling(false);
 
     PlonkishManager manager;
     const Variable x = manager.public_variable(Scalar(3));
@@ -211,6 +213,10 @@ int main()
     UniversalSrs invalid_srs = srs;
     invalid_srs.g1_powers[1] = G1::zero();
     assert(setup_rejects(*backend, arithmetization.circuit, invalid_srs));
+
+    UniversalSrs inconsistent_srs = srs;
+    inconsistent_srs.g1_powers[1] = G1::one();
+    assert(setup_rejects(*backend, arithmetization.circuit, inconsistent_srs));
 
     Circuit invalid_permutation = arithmetization.circuit;
     invalid_permutation.sigma_1[0] = invalid_permutation.sigma_1[1];

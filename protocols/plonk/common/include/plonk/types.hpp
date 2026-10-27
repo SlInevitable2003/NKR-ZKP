@@ -94,7 +94,7 @@ struct VerificationKey {
 };
 
 // The proof container is intentionally left opaque until the transcript,
-// canonical encoding, and exact low-level protocol document are frozen.
+// BinaryArchive field layout, and exact low-level protocol document are frozen.
 struct Proof {
     std::vector<std::uint8_t> encoded;
 };

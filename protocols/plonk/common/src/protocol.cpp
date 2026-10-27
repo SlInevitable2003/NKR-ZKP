@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "libff/algebra/scalar_multiplication/multiexp.hpp"
+
 namespace nkr::plonk {
 namespace {
 
@@ -103,6 +105,41 @@ bool validate_srs(const UniversalSrs &srs, std::size_t domain_size, std::string 
     if (srs.g2.is_zero() || srs.tau_g2.is_zero() ||
         !srs.g2.is_well_formed() || !srs.tau_g2.is_well_formed()) {
         error = "SRS contains an invalid G2 point";
+        return false;
+    }
+    if (srs.g1_powers.front() != G1::one() || srs.g2 != G2::one()) {
+        error = "SRS generators do not match the protocol generators";
+        return false;
+    }
+
+    // Batch all adjacent power relations with a random linear combination:
+    // e(sum r^i [tau^(i+1)]_1, [1]_2) ==
+    // e(sum r^i [tau^i]_1, [tau]_2).
+    const std::size_t relations = domain_size + 2;
+    Scalar challenge;
+    do {
+        challenge = Scalar::random_element();
+    } while (challenge.is_zero());
+    std::vector<Scalar> weights(relations);
+    weights[0] = Scalar::one();
+    for (std::size_t i = 1; i < relations; ++i)
+        weights[i] = weights[i - 1] * challenge;
+
+    const G1 lower = libff::multi_exp<G1, Scalar, libff::multi_exp_method_BDLO12>(
+        srs.g1_powers.begin(),
+        srs.g1_powers.begin() + relations,
+        weights.begin(),
+        weights.end(),
+        1);
+    const G1 upper = libff::multi_exp<G1, Scalar, libff::multi_exp_method_BDLO12>(
+        srs.g1_powers.begin() + 1,
+        srs.g1_powers.begin() + 1 + relations,
+        weights.begin(),
+        weights.end(),
+        1);
+    if (Curve::reduced_pairing(upper, srs.g2) !=
+        Curve::reduced_pairing(lower, srs.tau_g2)) {
+        error = "SRS G1 powers are inconsistent with tau_g2";
         return false;
     }
     return true;

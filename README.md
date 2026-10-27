@@ -3,6 +3,9 @@
 NKR-ZKP 是一个实验性的多协议、多后端零知识证明框架。当前项目将协议语义与可复用的计算算子分离：
 
 ```text
+common/
+  include/                 共享 BinaryArchive 等主机侧工具
+
 operators/
   cuda/                    共享的 BN254 CUDA 域、曲线、NTT、MSM 算子
   hip/                     共享的 BN254 HIP 域、曲线、NTT、MSM 算子
@@ -13,8 +16,8 @@ protocols/
     common/                协议类型、I/O、验证及后端注册
     backends/{cpu,cuda,hip}
   plonk/
-    app/                   gen/setup/prove/verify 占位命令行程序
-    common/                算术化、协议类型、API 及后端注册
+    app/                   可用的 gen/setup 与 prove/verify 框架
+    common/                算术化、协议类型、I/O、API 及后端注册
     backends/{cpu,cuda,hip}
   stark/winterfell/
 
@@ -27,7 +30,7 @@ CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各
 ## 当前状态
 
 - Groth16 已有可用的 CPU、CUDA 和 HIP 后端。CPU 后端始终参与构建；配置时可以选择 CUDA 或 HIP 加速后端。
-- PLONK 已有独立的三线 Plonkish 算术化 Manager 和 CPU Setup 内存 API，包括固定多项式 iNTT、KZG 承诺及扩展陪集缓存。Prove、Verify 和规范化文件 I/O 尚未实现，因此命令行程序仍会按设计以状态码 2 退出。
+- PLONK 已有独立的三线 Plonkish 算术化 Manager、CPU Setup，以及基于共享 `BinaryArchive` 的电路、见证、SRS、PK/VK 文件 I/O。`plonk-gen` 和 `plonk-setup` 已可使用；Prove 与 Verify 尚未实现，对应命令行程序仍会按设计以状态码 2 退出。
 - 原有的 Rust PLONK CPU/CUDA 代码已删除。新实现计划以 `docs/plonk_protocol_low_level.pdf` 描述的 BN254、KZG 方案为准。
 - Winterfell 仍作为独立的 Rust CPU 实现保留。
 
