@@ -15,12 +15,14 @@ using G2 = libff::G2<Curve>;
 
 struct Circuit {
     std::size_t domain_size = 0;
+    std::size_t rows = 0; // non-padding rows, including public-input rows
     std::size_t public_inputs = 0;
     std::vector<Scalar> q_l;
     std::vector<Scalar> q_r;
     std::vector<Scalar> q_m;
     std::vector<Scalar> q_o;
     std::vector<Scalar> q_c;
+    // Each entry is a destination cell encoded as column * domain_size + row.
     std::vector<std::uint32_t> sigma_1;
     std::vector<std::uint32_t> sigma_2;
     std::vector<std::uint32_t> sigma_3;
@@ -30,7 +32,7 @@ struct Witness {
     std::vector<Scalar> a;
     std::vector<Scalar> b;
     std::vector<Scalar> c;
-    std::vector<Scalar> public_input;
+    std::vector<Scalar> public_input; // full PI column over H; public rows come first
 };
 
 struct UniversalSrs {

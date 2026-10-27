@@ -18,7 +18,7 @@ LIGHTZK_DEPS_DIR ?= $(CURDIR)/third_party/lightzk/depends
 PROFILE_FLAG = $(if $(filter 1 true yes on,$(PROFILE)),--profile,)
 HIP_ARCH_FLAG = $(if $(strip $(HIP_ARCH)),-DCMAKE_HIP_ARCHITECTURES=$(HIP_ARCH),)
 
-.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-clean plonk-scaffold stark stark-matmul clean
+.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-clean plonk-scaffold plonk-test-arithmetization stark stark-matmul clean
 
 help:
 	@echo "NKR-ZKP targets:"
@@ -31,6 +31,7 @@ help:
 	@echo "  groth16-test-hip   run a HIP setup/prove/verify flow"
 	@echo "  groth16-clean  remove all Groth16 CMake build trees"
 	@echo "  plonk-scaffold build the PLONK interfaces and placeholder apps"
+	@echo "  plonk-test-arithmetization  build and test the PLONK circuit manager"
 	@echo "  stark          build Winterfell with concurrent CPU support"
 	@echo "  stark-matmul   run the Winterfell matrix multiplication example"
 
@@ -96,6 +97,11 @@ groth16-clean:
 plonk-scaffold: groth16-cpu
 	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS) \
 		--target plonk-gen plonk-setup plonk-prove plonk-verify
+
+plonk-test-arithmetization: groth16-cpu
+	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS) \
+		--target plonk-arithmetization-test
+	$(GROTH16_BUILD_DIR)/protocols/plonk/plonk-arithmetization-test
 
 stark:
 	RAYON_NUM_THREADS=$(THREADS) cargo build --release \

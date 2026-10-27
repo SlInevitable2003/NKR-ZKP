@@ -2,6 +2,7 @@ set(NKR_ZKP_PLONK_BIN_DIR "${CMAKE_BINARY_DIR}/bin" CACHE PATH
     "Directory for PLONK executables")
 
 add_library(nkr_plonk_common STATIC
+    common/src/arithmetization.cpp
     common/src/backend_registry.cpp
     common/src/protocol.cpp)
 target_compile_features(nkr_plonk_common PUBLIC cxx_std_17)
@@ -13,6 +14,10 @@ target_link_libraries(nkr_plonk_common PUBLIC snark OpenMP::OpenMP_CXX)
 
 add_library(nkr_plonk_cpu STATIC backends/cpu/src/backend.cpp)
 target_link_libraries(nkr_plonk_cpu PUBLIC nkr_plonk_common)
+
+add_executable(plonk-arithmetization-test EXCLUDE_FROM_ALL
+    tests/arithmetization_test.cpp)
+target_link_libraries(plonk-arithmetization-test PRIVATE nkr_plonk_common)
 
 set(NKR_ZKP_PLONK_ACCELERATOR_TARGET "")
 if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")
