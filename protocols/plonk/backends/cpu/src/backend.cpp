@@ -55,21 +55,6 @@ std::pair<Scalar, Scalar> choose_wire_cosets(const std::size_t n)
     throw std::runtime_error("PLONK Setup: failed to choose disjoint wire cosets");
 }
 
-Scalar choose_quotient_coset(const std::size_t quotient_domain_size)
-{
-    Scalar candidate = Scalar::multiplicative_generator;
-    if ((candidate ^ quotient_domain_size) != Scalar::one()) {
-        return candidate;
-    }
-    for (std::uint64_t value = 2; value < 1024; ++value) {
-        candidate = Scalar(value);
-        if ((candidate ^ quotient_domain_size) != Scalar::one()) {
-            return candidate;
-        }
-    }
-    throw std::runtime_error("PLONK Setup: failed to choose an extended-domain coset");
-}
-
 G1 commit_polynomial(const std::vector<Scalar> &coefficients,
                      const UniversalSrs &srs)
 {
@@ -237,7 +222,11 @@ public:
 
         const Scalar omega = domain->get_domain_element(1);
         const auto [k_1, k_2] = choose_wire_cosets(n);
-        const Scalar coset_shift = choose_quotient_coset(quotient_size);
+        const Scalar coset_shift = Scalar::multiplicative_generator;
+        if ((coset_shift ^ quotient_size) == Scalar::one()) {
+            throw std::invalid_argument(
+                "PLONK Setup: quotient coset intersects the evaluation domain");
+        }
 
         std::vector<Scalar> roots(n);
         roots[0] = Scalar::one();

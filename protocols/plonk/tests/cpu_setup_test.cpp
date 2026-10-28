@@ -178,6 +178,7 @@ int main()
     assert(domain.quotient_domain_size == 4 * n);
     assert((domain.omega ^ n) == Scalar::one());
     assert(n == 1 || (domain.omega ^ (n / 2)) != Scalar::one());
+    assert(domain.coset_shift == Scalar::multiplicative_generator);
     assert((domain.k_1 ^ n) != Scalar::one());
     assert((domain.k_2 ^ n) != Scalar::one());
     assert(((domain.k_2 * domain.k_1.inverse()) ^ n) != Scalar::one());
