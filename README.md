@@ -126,16 +126,16 @@ build/plonk/bin/plonk-verify
 
 当前可完整运行的是 CPU 后端。CUDA/HIP 目录已经保留统一的后端接口，但 PLONK 协议适配尚未实现，因此目前不要向 PLONK 的 `setup` 或 `prove` 传入 `--backend cuda` / `--backend hip`。这不影响 Groth16 使用已有的 CUDA/HIP 后端。
 
-以下命令在仓库根目录构建 PLONK，并完整运行一个规模为 2 的矩阵乘法电路：
+以下命令在仓库根目录构建 PLONK，并完整运行一个规模为 100 的矩阵乘法电路：
 
 ```bash
 make plonk-cpu
 PLONK_BIN=build/plonk/bin
 
-"$PLONK_BIN/plonk-gen" matmul 2
-"$PLONK_BIN/plonk-setup" --backend cpu matmul_2.bin
-"$PLONK_BIN/plonk-prove" --backend cpu matmul_2.bin
-"$PLONK_BIN/plonk-verify" matmul_2.bin
+"$PLONK_BIN/plonk-gen" matmul 100
+"$PLONK_BIN/plonk-setup" --backend cpu matmul_100.bin
+"$PLONK_BIN/plonk-prove" --backend cpu matmul_100.bin
+"$PLONK_BIN/plonk-verify" matmul_100.bin
 ```
 
 也可以生成 Fibonacci 电路，并显式复用已有的 SRS：
@@ -145,7 +145,7 @@ PLONK_BIN=build/plonk/bin
 
 "$PLONK_BIN/plonk-gen" fibonacci 10
 "$PLONK_BIN/plonk-setup" --backend cpu \
-  --srs matmul_2.srs.bin fibonacci_10.bin
+  --srs matmul_100.srs.bin fibonacci_10.bin
 "$PLONK_BIN/plonk-prove" --backend cpu fibonacci_10.bin
 "$PLONK_BIN/plonk-verify" fibonacci_10.bin
 ```

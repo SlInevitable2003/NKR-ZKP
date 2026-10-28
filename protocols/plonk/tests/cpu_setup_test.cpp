@@ -76,16 +76,16 @@ std::vector<Scalar> expected_sigma(const std::vector<std::uint32_t> &permutation
     const std::size_t n = parameters.domain_size;
     const std::array<Scalar, 3> cosets = {
         Scalar::one(), parameters.k_1, parameters.k_2};
-    std::vector<Scalar> roots(n);
-    roots[0] = Scalar::one();
+    std::vector<Scalar> omegas(n);
+    omegas[0] = Scalar::one();
     for (std::size_t row = 1; row < n; ++row) {
-        roots[row] = roots[row - 1] * parameters.omega;
+        omegas[row] = omegas[row - 1] * parameters.omega;
     }
 
     std::vector<Scalar> result(n);
     for (std::size_t row = 0; row < n; ++row) {
         const std::size_t destination = permutation[row];
-        result[row] = cosets[destination / n] * roots[destination % n];
+        result[row] = cosets[destination / n] * omegas[destination % n];
     }
     return result;
 }
@@ -183,6 +183,10 @@ int main()
     assert((domain.k_2 ^ n) != Scalar::one());
     assert(((domain.k_2 * domain.k_1.inverse()) ^ n) != Scalar::one());
     assert((domain.coset_shift ^ domain.quotient_domain_size) != Scalar::one());
+    assert(proving_key.omegas.size() == n);
+    assert(proving_key.omegas[0] == Scalar::one());
+    for (std::size_t row = 1; row < n; ++row)
+        assert(proving_key.omegas[row] == proving_key.omegas[row - 1] * domain.omega);
 
     assert(proving_key.fixed.q_l.evaluations == arithmetization.circuit.q_l);
     assert(proving_key.fixed.q_r.evaluations == arithmetization.circuit.q_r);
@@ -255,6 +259,7 @@ int main()
     const ProvingKey loaded_proving_key = read_proving_key(paths.proving_key);
     check_circuit_equal(loaded_proving_key.circuit, proving_key.circuit);
     check_domain_equal(loaded_proving_key.domain, proving_key.domain);
+    assert(loaded_proving_key.omegas == proving_key.omegas);
     check_commitments_equal(loaded_proving_key.commitments, proving_key.commitments);
     assert(loaded_proving_key.fixed.q_l.coefficients ==
            proving_key.fixed.q_l.coefficients);

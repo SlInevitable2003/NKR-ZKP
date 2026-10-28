@@ -7,7 +7,6 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -22,18 +21,12 @@ std::pair<Scalar, Scalar> choose_wire_cosets(const std::size_t n)
 {
     for (std::uint64_t first_value = 2; first_value < 1024; ++first_value) {
         const Scalar first(first_value);
-        if ((first ^ n) == Scalar::one()) {
-            continue;
-        }
+        if ((first ^ n) == Scalar::one()) { continue; }
         const Scalar first_inverse = first.inverse();
         for (std::uint64_t second_value = 2; second_value < 1024; ++second_value) {
             const Scalar second(second_value);
-            if ((second ^ n) == Scalar::one()) {
-                continue;
-            }
-            if (((second * first_inverse) ^ n) != Scalar::one()) {
-                return {first, second};
-            }
+            if ((second ^ n) == Scalar::one()) { continue; }
+            if (((second * first_inverse) ^ n) != Scalar::one()) { return {first, second}; }
         }
     }
     throw std::runtime_error("PLONK Setup: failed to choose disjoint wire cosets");
@@ -93,15 +86,6 @@ std::vector<Scalar> blind_permutation_polynomial(
     return coefficients;
 }
 
-void invert_nonzero(std::vector<Scalar> &values, const char *description)
-{
-    for (const Scalar &value : values) {
-        if (value.is_zero())
-            throw std::runtime_error(std::string("PLONK Prove: zero ") + description);
-    }
-    libff::batch_invert(values);
-}
-
 std::vector<Scalar> coset_evaluations(
     const std::vector<Scalar> &coefficients,
     const std::shared_ptr<libfqfft::evaluation_domain<Scalar>> &domain,
@@ -156,18 +140,18 @@ PolynomialData prepare_polynomial(
 
 std::vector<Scalar> make_sigma_evaluations(
     const std::vector<std::uint32_t> &permutation,
-    const std::vector<Scalar> &roots,
+    const std::vector<Scalar> &omegas,
     const Scalar &k_1,
     const Scalar &k_2)
 {
-    const std::size_t n = roots.size();
+    const std::size_t n = omegas.size();
     const std::array<Scalar, 3> column_cosets = {Scalar::one(), k_1, k_2};
     std::vector<Scalar> evaluations(n);
     for (std::size_t row = 0; row < n; ++row) {
         const std::size_t destination = permutation[row];
         const std::size_t destination_column = destination / n;
         const std::size_t destination_row = destination % n;
-        evaluations[row] = column_cosets[destination_column] * roots[destination_row];
+        evaluations[row] = column_cosets[destination_column] * omegas[destination_row];
     }
     return evaluations;
 }
@@ -176,10 +160,7 @@ class CpuBackend final : public Backend {
 public:
     const char *name() const override { return "cpu"; }
 
-    void setup(const Circuit &circuit,
-               const UniversalSrs &srs,
-               ProvingKey &proving_key,
-               VerificationKey &verification_key) override
+    void setup(const Circuit &circuit, const UniversalSrs &srs, ProvingKey &proving_key, VerificationKey &verification_key) override
     {
         const std::size_t n = circuit.domain_size;
         if (n < 8) { throw std::invalid_argument("PLONK Setup: domain size must be at least 8"); }
@@ -209,6 +190,7 @@ public:
         result.circuit = circuit;
         result.srs = srs;
         result.domain = { n, quotient_size, omega, k_1, k_2, coset_shift };
+        result.omegas = std::move(omegas);
 
         result.fixed.q_l = prepare_polynomial(circuit.q_l, domain, quotient_domain, coset_shift, srs, result.commitments.q_l);
         result.fixed.q_r = prepare_polynomial(circuit.q_r, domain, quotient_domain, coset_shift, srs, result.commitments.q_r);
@@ -226,68 +208,25 @@ public:
         verification_key.tau_g2 = srs.tau_g2;
     }
 
-    void prove(const ProvingKey &key,
-               const Witness &witness,
-               Proof &proof) override
+    void prove(const ProvingKey &key, const Witness &witness, Proof &proof) override
     {
         const std::size_t n = key.domain.domain_size;
         const std::size_t quotient_size = key.domain.quotient_domain_size;
-        const auto require_size = [](const auto &values,
-                                     const std::size_t expected,
-                                     const char *name) {
-            if (values.size() != expected)
-                throw std::invalid_argument(std::string("PLONK Prove: invalid ") + name +
-                                            " length");
-        };
-        require_size(witness.a, n, "A column");
-        require_size(witness.b, n, "B column");
-        require_size(witness.c, n, "C column");
-        require_size(witness.public_input, n, "public-input column");
-        require_size(key.fixed.q_l.coset_evaluations, quotient_size, "q_l cache");
-        require_size(key.fixed.q_r.coset_evaluations, quotient_size, "q_r cache");
-        require_size(key.fixed.q_m.coset_evaluations, quotient_size, "q_m cache");
-        require_size(key.fixed.q_o.coset_evaluations, quotient_size, "q_o cache");
-        require_size(key.fixed.q_c.coset_evaluations, quotient_size, "q_c cache");
-        require_size(key.fixed.sigma_1.evaluations, n, "sigma_1 evaluations");
-        require_size(key.fixed.sigma_2.evaluations, n, "sigma_2 evaluations");
-        require_size(key.fixed.sigma_3.evaluations, n, "sigma_3 evaluations");
-        require_size(key.fixed.sigma_1.coset_evaluations, quotient_size, "sigma_1 cache");
-        require_size(key.fixed.sigma_2.coset_evaluations, quotient_size, "sigma_2 cache");
-        require_size(key.fixed.sigma_3.coset_evaluations, quotient_size, "sigma_3 cache");
 
         const auto domain = libfqfft::get_evaluation_domain<Scalar>(n);
-        const auto quotient_domain =
-            libfqfft::get_evaluation_domain<Scalar>(quotient_size);
-        if (!domain || domain->m != n || !quotient_domain ||
-            quotient_domain->m != quotient_size) {
-            throw std::invalid_argument("PLONK Prove: invalid evaluation domains");
-        }
+        const auto quotient_domain = libfqfft::get_evaluation_domain<Scalar>(quotient_size);
+        Transcript transcript = initialize_transcript(verification_key_from(key), witness.public_input);
 
-        for (std::size_t row = 0; row < n; ++row) {
-            const Scalar residual = key.circuit.q_l[row] * witness.a[row] +
-                                    key.circuit.q_r[row] * witness.b[row] +
-                                    key.circuit.q_m[row] * witness.a[row] * witness.b[row] +
-                                    key.circuit.q_o[row] * witness.c[row] +
-                                    key.circuit.q_c[row] + witness.public_input[row];
-            if (residual != Scalar::zero())
-                throw std::invalid_argument("PLONK Prove: witness violates a gate");
-        }
-
-        Transcript transcript =
-            initialize_transcript(verification_key_from(key), witness.public_input);
-
+        // Round 1
         std::vector<Scalar> a_coefficients = witness.a;
         std::vector<Scalar> b_coefficients = witness.b;
         std::vector<Scalar> c_coefficients = witness.c;
         domain->iFFT(a_coefficients);
         domain->iFFT(b_coefficients);
         domain->iFFT(c_coefficients);
-        a_coefficients = blind_wire_polynomial(
-            std::move(a_coefficients), Scalar::random_element(), Scalar::random_element());
-        b_coefficients = blind_wire_polynomial(
-            std::move(b_coefficients), Scalar::random_element(), Scalar::random_element());
-        c_coefficients = blind_wire_polynomial(
-            std::move(c_coefficients), Scalar::random_element(), Scalar::random_element());
+        a_coefficients = blind_wire_polynomial(std::move(a_coefficients), Scalar::random_element(), Scalar::random_element());
+        b_coefficients = blind_wire_polynomial(std::move(b_coefficients), Scalar::random_element(), Scalar::random_element());
+        c_coefficients = blind_wire_polynomial(std::move(c_coefficients), Scalar::random_element(), Scalar::random_element());
 
         proof.a_commitment = commit_polynomial(a_coefficients, key.srs);
         proof.b_commitment = commit_polynomial(b_coefficients, key.srs);
@@ -298,20 +237,14 @@ public:
         const Scalar beta = transcript.challenge();
         const Scalar gamma = transcript.challenge();
 
-        std::vector<Scalar> roots(n, Scalar::one());
-        for (std::size_t i = 1; i < n; ++i) roots[i] = roots[i - 1] * key.domain.omega;
+        // Round 2
         std::vector<Scalar> numerator(n);
         std::vector<Scalar> denominator(n);
         for (std::size_t i = 0; i < n; ++i) {
-            numerator[i] = (witness.a[i] + beta * roots[i] + gamma) *
-                           (witness.b[i] + beta * key.domain.k_1 * roots[i] + gamma) *
-                           (witness.c[i] + beta * key.domain.k_2 * roots[i] + gamma);
-            denominator[i] =
-                (witness.a[i] + beta * key.fixed.sigma_1.evaluations[i] + gamma) *
-                (witness.b[i] + beta * key.fixed.sigma_2.evaluations[i] + gamma) *
-                (witness.c[i] + beta * key.fixed.sigma_3.evaluations[i] + gamma);
+            numerator[i] = (witness.a[i] + beta * key.omegas[i] + gamma) * (witness.b[i] + beta * key.domain.k_1 * key.omegas[i] + gamma) * (witness.c[i] + beta * key.domain.k_2 * key.omegas[i] + gamma);
+            denominator[i] = (witness.a[i] + beta * key.fixed.sigma_1.evaluations[i] + gamma) * (witness.b[i] + beta * key.fixed.sigma_2.evaluations[i] + gamma) * (witness.c[i] + beta * key.fixed.sigma_3.evaluations[i] + gamma);
         }
-        invert_nonzero(denominator, "permutation denominator");
+        libff::batch_invert(denominator);
         std::vector<Scalar> z_evaluations(n, Scalar::zero());
         z_evaluations[0] = Scalar::one();
         Scalar accumulator = Scalar::one();
@@ -319,31 +252,24 @@ public:
             accumulator *= numerator[i] * denominator[i];
             if (i + 1 < n) z_evaluations[i + 1] = accumulator;
         }
-        if (accumulator != Scalar::one())
-            throw std::invalid_argument("PLONK Prove: witness violates the copy permutation");
+        if (accumulator != Scalar::one()) throw std::invalid_argument("PLONK Prove: witness violates the copy permutation");
 
         std::vector<Scalar> z_coefficients = z_evaluations;
         domain->iFFT(z_coefficients);
-        z_coefficients = blind_permutation_polynomial(
-            std::move(z_coefficients), Scalar::random_element(),
-            Scalar::random_element(), Scalar::random_element());
+        z_coefficients = blind_permutation_polynomial(std::move(z_coefficients), Scalar::random_element(), Scalar::random_element(), Scalar::random_element());
         proof.z_commitment = commit_polynomial(z_coefficients, key.srs);
         transcript.append(proof.z_commitment);
         const Scalar alpha = transcript.challenge();
         const Scalar alpha_squared = alpha.squared();
 
+        // Round 3
         std::vector<Scalar> public_input_coefficients = witness.public_input;
         domain->iFFT(public_input_coefficients);
-        const std::vector<Scalar> a_coset = coset_evaluations(
-            a_coefficients, quotient_domain, key.domain.coset_shift);
-        const std::vector<Scalar> b_coset = coset_evaluations(
-            b_coefficients, quotient_domain, key.domain.coset_shift);
-        const std::vector<Scalar> c_coset = coset_evaluations(
-            c_coefficients, quotient_domain, key.domain.coset_shift);
-        const std::vector<Scalar> z_coset = coset_evaluations(
-            z_coefficients, quotient_domain, key.domain.coset_shift);
-        const std::vector<Scalar> pi_coset = coset_evaluations(
-            public_input_coefficients, quotient_domain, key.domain.coset_shift);
+        const std::vector<Scalar> a_coset = coset_evaluations(a_coefficients, quotient_domain, key.domain.coset_shift);
+        const std::vector<Scalar> b_coset = coset_evaluations(b_coefficients, quotient_domain, key.domain.coset_shift);
+        const std::vector<Scalar> c_coset = coset_evaluations(c_coefficients, quotient_domain, key.domain.coset_shift);
+        const std::vector<Scalar> z_coset = coset_evaluations(z_coefficients, quotient_domain, key.domain.coset_shift);
+        const std::vector<Scalar> pi_coset = coset_evaluations(public_input_coefficients, quotient_domain, key.domain.coset_shift);
 
         std::vector<Scalar> points(quotient_size);
         std::vector<Scalar> vanishing(quotient_size);
@@ -361,7 +287,7 @@ public:
             quotient_denominators[quotient_size + i] = point - Scalar::one();
             point *= quotient_omega;
         }
-        invert_nonzero(quotient_denominators, "quotient-domain denominator");
+        libff::batch_invert(quotient_denominators);
         for (std::size_t i = 0; i < quotient_size; ++i) {
             point = points[i];
             const Scalar l_1 = vanishing[i] * n_inverse *

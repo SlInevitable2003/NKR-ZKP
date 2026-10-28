@@ -211,6 +211,10 @@ bool validate_proving_key(const ProvingKey &key, std::string &error)
         error = "proving key contains invalid domain sizes";
         return false;
     }
+    if (key.omegas.size() != n) {
+        error = "proving key contains an invalid omega cache";
+        return false;
+    }
     if ((key.domain.omega ^ n) != Scalar::one() ||
         (n > 1 && (key.domain.omega ^ (n / 2)) == Scalar::one())) {
         error = "proving key contains an invalid N-th root of unity";

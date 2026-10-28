@@ -243,6 +243,7 @@ ProvingKey read_proving_key(const std::filesystem::path &path)
     ProvingKey key;
     key.circuit = read_circuit_data(archive);
     key.domain = read_domain(archive);
+    archive.read(key.omegas);
     key.fixed = read_fixed(archive);
     key.commitments = read_commitments(archive);
     key.srs = read_srs_data(archive);
@@ -255,6 +256,7 @@ void write_proving_key(const std::filesystem::path &path, const ProvingKey &key)
     archive.open_for_write(path.string());
     write_circuit_data(archive, key.circuit);
     write_domain(archive, key.domain);
+    archive.write(key.omegas);
     write_fixed(archive, key.fixed);
     write_commitments(archive, key.commitments);
     write_srs_data(archive, key.srs);

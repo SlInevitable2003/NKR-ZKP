@@ -43,7 +43,8 @@ make plonk-test-arithmetization
 - 选择互不相交的 `H`、`k1·H`、`k2·H`，并把线槽置换编码为三个置换多项式；
 - 对五个选择器和三个置换多项式分别执行 N 点 iNTT；
 - 使用单项式形式 SRS 完成八次 KZG MSM 承诺；
-- 在 `M = next_power_of_two(3N + 6)` 的陪集域上缓存八个固定多项式的点值；
+- 在 `M = 4N` 的陪集域上缓存八个固定多项式的点值；
+- 在 Proving Key 中缓存 Setup 生成的 `1, omega, ..., omega^(N-1)`，供 Prove 直接使用；
 - 分别生成包含固定多项式数据的 Proving Key 和精简的 Verification Key。
 
 CPU Setup 单元测试使用已知 `tau` 临时构造 SRS，仅用于验证承诺结果，不能用于生产环境：

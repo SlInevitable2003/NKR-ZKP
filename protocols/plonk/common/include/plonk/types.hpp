@@ -81,6 +81,7 @@ struct CircuitCommitments {
 struct ProvingKey {
     Circuit circuit;
     DomainParameters domain;
+    std::vector<Scalar> omegas;
     FixedPolynomials fixed;
     CircuitCommitments commitments;
     UniversalSrs srs;
