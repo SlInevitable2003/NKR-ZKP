@@ -77,12 +77,6 @@ bool require_size(const std::vector<T> &column,
 
 } // namespace
 
-[[noreturn]] void throw_scaffold_only()
-{
-    throw std::logic_error(
-        "the requested PLONK backend operation is not implemented yet");
-}
-
 UniversalSrs generate_srs(const std::size_t max_degree)
 {
     Scalar tau;
@@ -271,34 +265,6 @@ bool validate_witness(const ProvingKey &key,
         }
     }
     return true;
-}
-
-void setup(Backend &backend,
-           const Circuit &circuit,
-           const UniversalSrs &srs,
-           ProvingKey &proving_key,
-           VerificationKey &verification_key)
-{
-    std::string error;
-    if (!validate_circuit(circuit, error))
-        throw std::invalid_argument("PLONK Setup: " + error);
-    if (!validate_srs(srs, circuit.domain_size, error))
-        throw std::invalid_argument("PLONK Setup: " + error);
-    backend.setup(circuit, srs, proving_key, verification_key);
-}
-
-Proof prove(Backend &backend,
-            const ProvingKey &proving_key,
-            const Witness &witness)
-{
-    std::string error;
-    if (!validate_proving_key(proving_key, error))
-        throw std::invalid_argument("PLONK Prove: " + error);
-    if (!validate_witness(proving_key, witness, error))
-        throw std::invalid_argument("PLONK Prove: " + error);
-    Proof proof;
-    backend.prove(proving_key, witness, proof);
-    return proof;
 }
 
 bool verify(const VerificationKey &key,

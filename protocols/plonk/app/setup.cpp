@@ -39,11 +39,9 @@ int main(int argc, char **argv)
         else if (argument == "--profile") profile = true;
         else if (argument == "--help" || argument == "-h") usage(argv[0]);
         else if (!argument.empty() && argument.front() == '-') usage(argv[0]);
-        else if (filename.empty()) filename = argument;
-        else usage(argv[0]);
+        else filename = argument;
     }
     if (filename.empty()) usage(argv[0]);
-
     configure_profiling(profile);
     Curve::init_public_params();
 
@@ -76,20 +74,27 @@ int main(int argc, char **argv)
                 srs = read_srs(srs_path);
             }
         }
+        {
+            ProfileScope stage("plonk.setup.validate_srs");
+            if (!validate_srs(srs, circuit.domain_size, validation_error))
+                throw std::runtime_error("invalid SRS: " + validation_error);
+        }
 
         auto backend = make_backend(backend_name);
         std::cout << "PLONK setup backend: " << backend->name() << '\n';
-        ProvingKey proving_key;
-        VerificationKey verification_key;
+        ProvingKey proving_key; VerificationKey verification_key;
         {
             ProfileScope stage("plonk.setup.backend");
-            setup(*backend, circuit, srs, proving_key, verification_key);
+            backend->setup(circuit, srs, proving_key, verification_key);
         }
 
         std::filesystem::create_directories(directory);
+        if (generated_srs) {
+            ProfileScope stage("plonk.setup.write_srs");
+            write_srs(srs_path, srs);
+        }
         {
-            ProfileScope stage("plonk.setup.write_artifacts");
-            if (generated_srs) write_srs(srs_path, srs);
+            ProfileScope stage("plonk.setup.write_keys");
             write_proving_key(paths.proving_key, proving_key);
             write_verification_key(paths.verification_key, verification_key);
         }

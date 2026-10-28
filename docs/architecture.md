@@ -50,7 +50,7 @@ protocols/<protocol>/
   tests/
 ```
 
-`app/` 只包含轻量的命令行入口。协议类型分别放在 `nkr::groth16` 和 `nkr::plonk` 子命名空间，避免两套 `Circuit`、`Proof` 和协议函数发生冲突。`common/` 负责协议类型、公共 API、校验、产物 I/O、验证和后端选择。各后端目录负责平台适配与协议专属的融合内核。公共头文件只能使用主机侧类型。
+`app/` 只包含轻量的命令行入口。协议类型分别放在 `nkr::groth16` 和 `nkr::plonk` 子命名空间，避免两套 `Circuit`、`Proof` 和协议函数发生冲突。电路构建器不属于协议 API：Groth16 使用 `LightZK` 中的 R1CS 构建器，PLONK 使用独立的 `Plonkish` 算术化构建器。`common/` 负责协议类型、公共 API、校验、产物 I/O、验证和后端选择。各后端目录负责平台适配与协议专属的融合内核。公共头文件只能使用主机侧类型。
 
 Groth16 是外部 `gen/setup/prove/verify` 组织方式的可用参考，但其当前较粗粒度的 `Backend::setup/prove` 接口不构成 PLONK 内部实现的限制。PLONK 可以采用按轮次组织的会话，在公共层控制 Transcript 顺序的同时，让多项式常驻 GPU。
 

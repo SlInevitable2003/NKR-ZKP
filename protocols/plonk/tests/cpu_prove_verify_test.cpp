@@ -1,4 +1,4 @@
-#include "plonk/arithmetization.hpp"
+#include "plonkish/arithmetization.hpp"
 #include "plonk/backend.hpp"
 #include "plonk/io.hpp"
 #include "profile.hpp"
@@ -11,6 +11,7 @@
 #include <string>
 
 using namespace nkr::plonk;
+using namespace Plonkish;
 using nkr::configure_profiling;
 
 namespace {
@@ -62,9 +63,11 @@ int main()
     auto backend = make_cpu_backend();
     ProvingKey proving_key;
     VerificationKey verification_key;
-    setup(*backend, arithmetization.circuit, srs, proving_key, verification_key);
+    backend->setup(
+        arithmetization.circuit, srs, proving_key, verification_key);
 
-    const Proof proof = prove(*backend, proving_key, arithmetization.witness);
+    Proof proof;
+    backend->prove(proving_key, arithmetization.witness, proof);
     assert(verify(verification_key, arithmetization.witness.public_input, proof));
 
     Proof changed_scalar = proof;
@@ -87,7 +90,8 @@ int main()
     invalid_witness.a[0] += Scalar::one();
     bool rejected = false;
     try {
-        (void)prove(*backend, proving_key, invalid_witness);
+        Proof invalid_proof;
+        backend->prove(proving_key, invalid_witness, invalid_proof);
     } catch (const std::invalid_argument &) {
         rejected = true;
     }

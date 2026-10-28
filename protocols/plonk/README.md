@@ -7,7 +7,7 @@
 - `backends/cpu`：基于 libff/libfqfft 的参考后端；
 - `backends/cuda` 和 `backends/hip`：建立在顶层公共算子之上的轻量协议适配层。
 
-协议类型和函数位于 `nkr::plonk`，与 Groth16 的 `nkr::groth16` 对称，避免 `Circuit`、`Proof`、`setup`、`prove`、`verify` 等同名符号冲突。`ProfileScope` 和 `configure_profiling` 不属于任何具体协议，位于顶层共享模块及 `nkr` 命名空间；两个协议使用协议前缀区分计时标签。
+协议类型和函数位于 `nkr::plonk`，与 Groth16 的 `nkr::groth16` 对称。算术化构建器位于独立的 `Plonkish` 命名空间，对应 Groth16 电路生成阶段使用的 `LightZK` R1CS 构建器，不混入协议 API。`ProfileScope` 和 `configure_profiling` 不属于任何具体协议，位于顶层共享模块及 `nkr` 命名空间；两个协议使用协议前缀区分计时标签。
 
 原有的 Rust CPU/CUDA 代码已删除。它们基于不同的软件栈，实现的是另一种带查找功能的四线协议，因此不会作为当前框架的实现基础。
 
@@ -15,7 +15,7 @@
 
 ## Plonkish 算术化 Manager
 
-`common/include/plonk/arithmetization.hpp` 提供独立的 `PlonkishManager`，不复用 Groth16 的 R1CS Manager。它直接描述经典三线 PLONK 门：
+`common/include/plonkish/arithmetization.hpp` 提供独立的 `Plonkish::PlonkishManager`，不复用 Groth16 的 R1CS Manager，也不属于 `nkr::plonk` 协议接口。它直接描述经典三线 PLONK 门：
 
 ```text
 qL·a + qR·b + qM·a·b + qO·c + qC + PI = 0
@@ -76,12 +76,12 @@ make plonk-cpu
 PLONK_BIN=build/groth16/bin
 PLONK_DATA=build/groth16/plonk-data
 
-"$PLONK_BIN/plonk-gen" --path "$PLONK_DATA" matmul 2
+"$PLONK_BIN/plonk-gen" matmul 2
 "$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" matmul_2.bin
 "$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" matmul_2.bin
 "$PLONK_BIN/plonk-verify" --path "$PLONK_DATA" matmul_2.bin
 
-"$PLONK_BIN/plonk-gen" --path "$PLONK_DATA" fibonacci 10
+"$PLONK_BIN/plonk-gen" fibonacci 10
 "$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" \
   --srs matmul_2.srs.bin fibonacci_10.bin
 "$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" fibonacci_10.bin

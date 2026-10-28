@@ -1,4 +1,4 @@
-#include "plonk/arithmetization.hpp"
+#include "plonkish/arithmetization.hpp"
 #include "plonk/backend.hpp"
 #include "plonk/io.hpp"
 #include "profile.hpp"
@@ -16,6 +16,7 @@
 #include "libfqfft/evaluation_domain/get_evaluation_domain.hpp"
 
 using namespace nkr::plonk;
+using namespace Plonkish;
 using nkr::configure_profiling;
 
 namespace {
@@ -93,10 +94,15 @@ bool setup_rejects(Backend &backend,
                    const Circuit &circuit,
                    const UniversalSrs &srs)
 {
+    std::string error;
+    if (!validate_circuit(circuit, error) ||
+        !validate_srs(srs, circuit.domain_size, error)) {
+        return true;
+    }
     ProvingKey proving_key;
     VerificationKey verification_key;
     try {
-        setup(backend, circuit, srs, proving_key, verification_key);
+        backend.setup(circuit, srs, proving_key, verification_key);
     } catch (const std::invalid_argument &) {
         return true;
     }
@@ -164,7 +170,8 @@ int main()
 
     ProvingKey proving_key;
     VerificationKey verification_key;
-    setup(*backend, arithmetization.circuit, srs, proving_key, verification_key);
+    backend->setup(
+        arithmetization.circuit, srs, proving_key, verification_key);
 
     const DomainParameters &domain = proving_key.domain;
     assert(domain.domain_size == n);

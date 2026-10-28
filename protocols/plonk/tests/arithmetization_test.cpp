@@ -1,4 +1,4 @@
-#include "plonk/arithmetization.hpp"
+#include "plonkish/arithmetization.hpp"
 
 #include <array>
 #include <cassert>
@@ -8,6 +8,7 @@
 #include <vector>
 
 using namespace nkr::plonk;
+using namespace Plonkish;
 
 namespace {
 

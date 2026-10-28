@@ -11,6 +11,7 @@ required=(
   protocols/groth16/backends/cuda
   protocols/groth16/backends/hip
   protocols/plonk/common/include/plonk/api.hpp
+  protocols/plonk/common/include/plonkish/arithmetization.hpp
   protocols/plonk/backends/cpu
   protocols/plonk/backends/cuda
   protocols/plonk/backends/hip

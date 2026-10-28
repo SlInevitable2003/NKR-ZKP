@@ -135,7 +135,7 @@ make plonk-cpu
 PLONK_BIN=build/groth16/bin
 PLONK_DATA=build/groth16/plonk-data
 
-"$PLONK_BIN/plonk-gen" --path "$PLONK_DATA" matmul 2
+"$PLONK_BIN/plonk-gen" matmul 2
 "$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" matmul_2.bin
 "$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" matmul_2.bin
 "$PLONK_BIN/plonk-verify" --path "$PLONK_DATA" matmul_2.bin
@@ -147,7 +147,7 @@ PLONK_DATA=build/groth16/plonk-data
 PLONK_BIN=build/groth16/bin
 PLONK_DATA=build/groth16/plonk-data
 
-"$PLONK_BIN/plonk-gen" --path "$PLONK_DATA" fibonacci 10
+"$PLONK_BIN/plonk-gen" fibonacci 10
 "$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" \
   --srs matmul_2.srs.bin fibonacci_10.bin
 "$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" fibonacci_10.bin

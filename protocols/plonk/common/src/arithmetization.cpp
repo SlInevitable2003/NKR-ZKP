@@ -1,4 +1,4 @@
-#include "plonk/arithmetization.hpp"
+#include "plonkish/arithmetization.hpp"
 
 #include <algorithm>
 #include <array>
@@ -7,7 +7,12 @@
 #include <string>
 #include <utility>
 
-namespace nkr::plonk {
+namespace Plonkish {
+
+using nkr::plonk::Scalar;
+using nkr::plonk::Circuit;
+using nkr::plonk::Witness;
+
 namespace {
 
 std::size_t next_power_of_two(std::size_t value)
@@ -242,4 +247,4 @@ Arithmetization PlonkishManager::finalize(std::size_t minimum_domain_size) const
     return result;
 }
 
-} // namespace nkr::plonk
+} // namespace Plonkish

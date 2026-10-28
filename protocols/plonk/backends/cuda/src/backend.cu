@@ -1,7 +1,7 @@
 #include "plonk/backend.hpp"
-#include "plonk/protocol.hpp"
 
 #include <memory>
+#include <stdexcept>
 
 #include "nkr/operators/cuda.hpp"
 
@@ -13,11 +13,11 @@ public:
     const char *name() const override { return "cuda"; }
     void setup(const Circuit &, const UniversalSrs &, ProvingKey &, VerificationKey &) override
     {
-        throw_scaffold_only();
+        throw std::logic_error("the requested PLONK CUDA operation is not implemented yet");
     }
     void prove(const ProvingKey &, const Witness &, Proof &) override
     {
-        throw_scaffold_only();
+        throw std::logic_error("the requested PLONK CUDA operation is not implemented yet");
     }
 };
 

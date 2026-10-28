@@ -35,23 +35,21 @@ int main(int argc, char **argv)
         else if (argument == "--profile") profile = true;
         else if (argument == "--help" || argument == "-h") usage(argv[0]);
         else if (!argument.empty() && argument.front() == '-') usage(argv[0]);
-        else if (filename.empty()) filename = argument;
-        else usage(argv[0]);
+        else filename = argument;
     }
     if (filename.empty()) usage(argv[0]);
-
     configure_profiling(profile);
     Curve::init_public_params();
 
     try {
         ProfileScope total("plonk.prove.total");
         const auto paths = artifact_paths(directory, filename);
-        ProvingKey proving_key;
         Witness witness;
+        ProvingKey proving_key;
         {
             ProfileScope stage("plonk.prove.read_inputs");
-            proving_key = read_proving_key(paths.proving_key);
             witness = read_witness(paths.witness);
+            proving_key = read_proving_key(paths.proving_key);
         }
         std::string validation_error;
         {
@@ -66,7 +64,7 @@ int main(int argc, char **argv)
         Proof proof;
         {
             ProfileScope stage("plonk.prove.backend");
-            proof = prove(*backend, proving_key, witness);
+            backend->prove(proving_key, witness, proof);
         }
         {
             ProfileScope stage("plonk.prove.write_proof");

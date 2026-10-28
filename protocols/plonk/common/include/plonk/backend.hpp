@@ -13,14 +13,16 @@ public:
     virtual ~Backend() = default;
     virtual const char *name() const = 0;
 
-    virtual void setup(const Circuit &circuit,
-                       const UniversalSrs &srs,
-                       ProvingKey &proving_key,
-                       VerificationKey &verification_key) = 0;
+    virtual void setup(
+        const Circuit &circuit,
+        const UniversalSrs &srs,
+        ProvingKey &proving_key,
+        VerificationKey &verification_key) = 0;
 
-    virtual void prove(const ProvingKey &proving_key,
-                       const Witness &witness,
-                       Proof &proof) = 0;
+    virtual void prove(
+        const ProvingKey &proving_key,
+        const Witness &witness,
+        Proof &proof) = 0;
 };
 
 std::unique_ptr<Backend> make_cpu_backend();

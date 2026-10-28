@@ -7,7 +7,7 @@
 
 #include "plonk/types.hpp"
 
-namespace nkr::plonk {
+namespace Plonkish {
 
 enum class VariableVisibility {
     Public,
@@ -35,24 +35,24 @@ private:
 };
 
 struct LinearTerm {
-    Scalar coefficient;
+    nkr::plonk::Scalar coefficient;
     Variable variable;
 };
 
 struct Arithmetization {
-    Circuit circuit;
-    Witness witness;
+    nkr::plonk::Circuit circuit;
+    nkr::plonk::Witness witness;
 };
 
 // A circuit builder for the classic three-wire PLONK gate
 //   q_l * a + q_r * b + q_m * a * b + q_o * c + q_c + PI = 0.
 class PlonkishManager {
 public:
-    Variable public_variable(const Scalar &value);
-    Variable private_variable(const Scalar &value);
-    Variable constant(const Scalar &value);
+    Variable public_variable(const nkr::plonk::Scalar &value);
+    Variable private_variable(const nkr::plonk::Scalar &value);
+    Variable constant(const nkr::plonk::Scalar &value);
 
-    const Scalar &value(Variable variable) const;
+    const nkr::plonk::Scalar &value(Variable variable) const;
     std::size_t num_variables() const { return variables_.size(); }
     std::size_t num_public_inputs() const { return public_variables_.size(); }
     std::size_t num_gates() const { return gates_.size(); }
@@ -61,7 +61,8 @@ public:
     Variable subtract(Variable lhs, Variable rhs);
     Variable multiply(Variable lhs, Variable rhs);
     Variable linear_combination(const std::vector<LinearTerm> &terms,
-                                const Scalar &constant_term = Scalar::zero());
+                                const nkr::plonk::Scalar &constant_term =
+                                    nkr::plonk::Scalar::zero());
 
     void assert_equal(Variable lhs, Variable rhs);
     void enforce_multiplication(Variable output, Variable lhs, Variable rhs);
@@ -69,32 +70,32 @@ public:
     void add_arithmetic_gate(Variable a,
                              Variable b,
                              Variable c,
-                             const Scalar &q_l,
-                             const Scalar &q_r,
-                             const Scalar &q_m,
-                             const Scalar &q_o,
-                             const Scalar &q_c);
+                             const nkr::plonk::Scalar &q_l,
+                             const nkr::plonk::Scalar &q_r,
+                             const nkr::plonk::Scalar &q_m,
+                             const nkr::plonk::Scalar &q_o,
+                             const nkr::plonk::Scalar &q_c);
 
     Arithmetization finalize(std::size_t minimum_domain_size = 8) const;
 
 private:
     struct VariableRecord {
         VariableVisibility visibility;
-        Scalar value;
+        nkr::plonk::Scalar value;
     };
 
     struct Gate {
         Variable a;
         Variable b;
         Variable c;
-        Scalar q_l;
-        Scalar q_r;
-        Scalar q_m;
-        Scalar q_o;
-        Scalar q_c;
+        nkr::plonk::Scalar q_l;
+        nkr::plonk::Scalar q_r;
+        nkr::plonk::Scalar q_m;
+        nkr::plonk::Scalar q_o;
+        nkr::plonk::Scalar q_c;
     };
 
-    Variable allocate(VariableVisibility visibility, const Scalar &value);
+    Variable allocate(VariableVisibility visibility, const nkr::plonk::Scalar &value);
     void validate_variable(Variable variable) const;
 
     std::vector<VariableRecord> variables_;
@@ -102,4 +103,4 @@ private:
     std::vector<Gate> gates_;
 };
 
-} // namespace nkr::plonk
+} // namespace Plonkish
