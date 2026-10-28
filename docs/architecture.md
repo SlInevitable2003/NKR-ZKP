@@ -41,8 +41,9 @@ Groth16 和 PLONK 有意采用相同的目录及命名风格：
 
 ```text
 protocols/<protocol>/
-  app/
-  common/include/<protocol>/
+  app/                         gen/setup/prove/verify 的 .cpp 入口
+  common/include/<protocol>/   协议公共 API 与类型
+  common/include/<arith>/      R1CS 或 Plonkish 电路构建器
   common/src/
   backends/cpu/
   backends/cuda/
@@ -50,7 +51,9 @@ protocols/<protocol>/
   tests/
 ```
 
-`app/` 只包含轻量的命令行入口。协议类型分别放在 `nkr::groth16` 和 `nkr::plonk` 子命名空间，避免两套 `Circuit`、`Proof` 和协议函数发生冲突。电路构建器不属于协议 API：Groth16 使用 `LightZK` 中的 R1CS 构建器，PLONK 使用独立的 `Plonkish` 算术化构建器。`common/` 负责协议类型、公共 API、校验、产物 I/O、验证和后端选择。各后端目录负责平台适配与协议专属的融合内核。公共头文件只能使用主机侧类型。
+其中 `<arith>` 在 Groth16 中是 `r1cs`，在 PLONK 中是 `plonkish`。`app/` 只直接包含四个轻量的命令行入口，不再设置 `app/include`、`app/src` 或 `app/backends`；可以复用的代码必须下沉到 `common` 或对应的 `backends`。协议类型分别放在 `nkr::groth16` 和 `nkr::plonk` 子命名空间，避免两套 `Circuit`、`Proof` 和协议函数发生冲突。电路构建器不属于协议 API：Groth16 使用 `LightZK` 中的 R1CS 构建器，PLONK 使用独立的 `Plonkish` 算术化构建器。`common/` 负责协议类型、公共 API、校验、产物 I/O、验证和后端选择。各后端目录负责平台适配与协议专属的融合内核。公共头文件只能使用主机侧类型。
+
+源码根目录下不保留空的占位目录。新层级应在第一份实际源码或头文件加入时创建；迁移代码后，也应一并删除已经失去内容的旧层级。`scripts/check-layout.sh` 会检查 `common`、`operators` 和 `protocols` 下的空目录，避免本地重构残留被误认为稳定接口。
 
 Groth16 是外部 `gen/setup/prove/verify` 组织方式的可用参考，但其当前较粗粒度的 `Backend::setup/prove` 接口不构成 PLONK 内部实现的限制。PLONK 可以采用按轮次组织的会话，在公共层控制 Transcript 顺序的同时，让多项式常驻 GPU。
 

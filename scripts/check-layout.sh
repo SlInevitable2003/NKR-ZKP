@@ -29,6 +29,12 @@ for path in "${required[@]}"; do
   fi
 done
 
+empty_source_dir=$(find common operators protocols -type d -empty -print -quit)
+if [[ -n "$empty_source_dir" ]]; then
+  echo "empty directory found under source roots: $empty_source_dir" >&2
+  exit 1
+fi
+
 if find protocols operators third_party -type d -name .git -print -quit | grep -q .; then
   echo "nested Git directory found under source roots" >&2
   exit 1

@@ -13,11 +13,11 @@ operators/
 
 protocols/
   groth16/
-    app/                   gen/setup/prove/verify 命令行程序
+    app/                   仅含 gen/setup/prove/verify 的 .cpp 入口
     common/                协议类型、I/O、验证及后端注册
     backends/{cpu,cuda,hip}
   plonk/
-    app/                   统一的 gen/setup/prove/verify 命令行程序
+    app/                   仅含统一的 gen/setup/prove/verify .cpp 入口
     common/                算术化、协议类型、I/O、API 及后端注册
     backends/{cpu,cuda,hip}
   stark/winterfell/
@@ -168,12 +168,13 @@ make plonk-test-cpu-prove-verify
 
 ## 分层规则
 
-- `app/` 只负责解析命令和组织文件流程。
+- `app/` 只负责解析命令和组织文件流程，入口实现直接放在该目录，不设置空的 `include/`、`src/` 或 `backends/` 子层级。
 - `protocols/*/common` 负责公共协议类型、Transcript/I/O 规则、验证以及与后端无关的语义。
 - `protocols/*/backends` 负责协议专属的加速数据流和融合内核。
 - `operators/*` 负责与协议无关的域运算、曲线运算、NTT、MSM、内存管理，以及未来可加入的扫描和批量求逆等基础算子。
 - 公共协议头文件不得暴露 `cudaStream_t`、`hipStream_t` 或设备指针。
 - 一个协议不得包含另一个协议的后端头文件。
+- `common/`、`operators/` 和 `protocols/` 下不保留空的占位目录；新增目录必须同时承载实际源码或头文件。
 
 详细的依赖方向与迁移约束请参阅 [docs/architecture.md](docs/architecture.md)，导入源码的来源请参阅 [docs/provenance.md](docs/provenance.md)。
 
