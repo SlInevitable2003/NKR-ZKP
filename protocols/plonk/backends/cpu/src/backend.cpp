@@ -18,22 +18,6 @@
 namespace nkr::plonk {
 namespace {
 
-std::size_t next_power_of_two(const std::size_t value)
-{
-    if (value == 0) {
-        return 1;
-    }
-    if (value > (std::numeric_limits<std::size_t>::max() >> 1) + 1) {
-        throw std::invalid_argument("PLONK Setup: quotient domain size overflows size_t");
-    }
-
-    std::size_t result = 1;
-    while (result < value) {
-        result <<= 1;
-    }
-    return result;
-}
-
 std::pair<Scalar, Scalar> choose_wire_cosets(const std::size_t n)
 {
     for (std::uint64_t first_value = 2; first_value < 1024; ++first_value) {
@@ -55,15 +39,9 @@ std::pair<Scalar, Scalar> choose_wire_cosets(const std::size_t n)
     throw std::runtime_error("PLONK Setup: failed to choose disjoint wire cosets");
 }
 
-G1 commit_polynomial(const std::vector<Scalar> &coefficients,
-                     const UniversalSrs &srs)
+G1 commit_polynomial(const std::vector<Scalar> &coefficients, const UniversalSrs &srs)
 {
-    return libff::multi_exp<G1, Scalar, libff::multi_exp_method_BDLO12>(
-        srs.g1_powers.begin(),
-        srs.g1_powers.begin() + coefficients.size(),
-        coefficients.begin(),
-        coefficients.end(),
-        1);
+    return libff::multi_exp<G1, Scalar, libff::multi_exp_method_BDLO12>(srs.g1_powers.begin(), srs.g1_powers.begin() + coefficients.size(), coefficients.begin(), coefficients.end(), 1);
 }
 
 Scalar evaluate_polynomial(const std::vector<Scalar> &coefficients,
@@ -204,64 +182,42 @@ public:
                VerificationKey &verification_key) override
     {
         const std::size_t n = circuit.domain_size;
-        if (n > (std::numeric_limits<std::size_t>::max() - 6) / 3) {
-            throw std::invalid_argument("PLONK Setup: quotient domain size overflows size_t");
-        }
+        if (n < 8) { throw std::invalid_argument("PLONK Setup: domain size must be at least 8"); }
+        if (n > std::numeric_limits<std::size_t>::max() / 4) { throw std::invalid_argument("PLONK Setup: quotient domain size overflows size_t"); }
 
         const auto domain = libfqfft::get_evaluation_domain<Scalar>(n);
-        if (!domain || domain->m != n) {
-            throw std::invalid_argument("PLONK Setup: the scalar field does not support this domain");
-        }
+        if (!domain || domain->m != n) { throw std::invalid_argument("PLONK Setup: the scalar field does not support this domain"); }
 
-        const std::size_t quotient_size = next_power_of_two(3 * n + 6);
+        const std::size_t quotient_size = 4 * n;
         const auto quotient_domain = libfqfft::get_evaluation_domain<Scalar>(quotient_size);
-        if (!quotient_domain || quotient_domain->m != quotient_size) {
-            throw std::invalid_argument(
-                "PLONK Setup: the scalar field does not support the quotient domain");
-        }
+        if (!quotient_domain || quotient_domain->m != quotient_size) { throw std::invalid_argument("PLONK Setup: the scalar field does not support the quotient domain"); }
 
         const Scalar omega = domain->get_domain_element(1);
         const auto [k_1, k_2] = choose_wire_cosets(n);
         const Scalar coset_shift = Scalar::multiplicative_generator;
-        if ((coset_shift ^ quotient_size) == Scalar::one()) {
-            throw std::invalid_argument(
-                "PLONK Setup: quotient coset intersects the evaluation domain");
-        }
+        if ((coset_shift ^ quotient_size) == Scalar::one()) { throw std::invalid_argument("PLONK Setup: quotient coset intersects the evaluation domain"); }
 
-        std::vector<Scalar> roots(n);
-        roots[0] = Scalar::one();
-        for (std::size_t row = 1; row < n; ++row) {
-            roots[row] = roots[row - 1] * omega;
-        }
+        std::vector<Scalar> omegas(n);
+        omegas[0] = Scalar::one();
+        for (std::size_t row = 1; row < n; ++row) omegas[row] = omegas[row - 1] * omega;
 
-        const std::vector<Scalar> sigma_1 =
-            make_sigma_evaluations(circuit.sigma_1, roots, k_1, k_2);
-        const std::vector<Scalar> sigma_2 =
-            make_sigma_evaluations(circuit.sigma_2, roots, k_1, k_2);
-        const std::vector<Scalar> sigma_3 =
-            make_sigma_evaluations(circuit.sigma_3, roots, k_1, k_2);
+        const std::vector<Scalar> sigma_1 = make_sigma_evaluations(circuit.sigma_1, omegas, k_1, k_2);
+        const std::vector<Scalar> sigma_2 = make_sigma_evaluations(circuit.sigma_2, omegas, k_1, k_2);
+        const std::vector<Scalar> sigma_3 = make_sigma_evaluations(circuit.sigma_3, omegas, k_1, k_2);
 
         ProvingKey result;
         result.circuit = circuit;
         result.srs = srs;
-        result.domain = {n, quotient_size, omega, k_1, k_2, coset_shift};
+        result.domain = { n, quotient_size, omega, k_1, k_2, coset_shift };
 
-        result.fixed.q_l = prepare_polynomial(
-            circuit.q_l, domain, quotient_domain, coset_shift, srs, result.commitments.q_l);
-        result.fixed.q_r = prepare_polynomial(
-            circuit.q_r, domain, quotient_domain, coset_shift, srs, result.commitments.q_r);
-        result.fixed.q_m = prepare_polynomial(
-            circuit.q_m, domain, quotient_domain, coset_shift, srs, result.commitments.q_m);
-        result.fixed.q_o = prepare_polynomial(
-            circuit.q_o, domain, quotient_domain, coset_shift, srs, result.commitments.q_o);
-        result.fixed.q_c = prepare_polynomial(
-            circuit.q_c, domain, quotient_domain, coset_shift, srs, result.commitments.q_c);
-        result.fixed.sigma_1 = prepare_polynomial(
-            sigma_1, domain, quotient_domain, coset_shift, srs, result.commitments.sigma_1);
-        result.fixed.sigma_2 = prepare_polynomial(
-            sigma_2, domain, quotient_domain, coset_shift, srs, result.commitments.sigma_2);
-        result.fixed.sigma_3 = prepare_polynomial(
-            sigma_3, domain, quotient_domain, coset_shift, srs, result.commitments.sigma_3);
+        result.fixed.q_l = prepare_polynomial(circuit.q_l, domain, quotient_domain, coset_shift, srs, result.commitments.q_l);
+        result.fixed.q_r = prepare_polynomial(circuit.q_r, domain, quotient_domain, coset_shift, srs, result.commitments.q_r);
+        result.fixed.q_m = prepare_polynomial(circuit.q_m, domain, quotient_domain, coset_shift, srs, result.commitments.q_m);
+        result.fixed.q_o = prepare_polynomial(circuit.q_o, domain, quotient_domain, coset_shift, srs, result.commitments.q_o);
+        result.fixed.q_c = prepare_polynomial(circuit.q_c, domain, quotient_domain, coset_shift, srs, result.commitments.q_c);
+        result.fixed.sigma_1 = prepare_polynomial(sigma_1, domain, quotient_domain, coset_shift, srs, result.commitments.sigma_1);
+        result.fixed.sigma_2 = prepare_polynomial(sigma_2, domain, quotient_domain, coset_shift, srs, result.commitments.sigma_2);
+        result.fixed.sigma_3 = prepare_polynomial(sigma_3, domain, quotient_domain, coset_shift, srs, result.commitments.sigma_3);
 
         proving_key = std::move(result);
         verification_key.domain = proving_key.domain;
