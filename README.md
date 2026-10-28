@@ -129,32 +129,29 @@ build/groth16/bin/plonk-verify
 以下命令在仓库根目录构建 PLONK，并完整运行一个规模为 2 的矩阵乘法电路：
 
 ```bash
-make groth16-clean
 make plonk-cpu
 
 PLONK_BIN=build/groth16/bin
-PLONK_DATA=build/groth16/plonk-data
 
 "$PLONK_BIN/plonk-gen" matmul 2
-"$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" matmul_2.bin
-"$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" matmul_2.bin
-"$PLONK_BIN/plonk-verify" --path "$PLONK_DATA" matmul_2.bin
+"$PLONK_BIN/plonk-setup" --backend cpu matmul_2.bin
+"$PLONK_BIN/plonk-prove" --backend cpu matmul_2.bin
+"$PLONK_BIN/plonk-verify" matmul_2.bin
 ```
 
 也可以生成 Fibonacci 电路，并显式复用已有的 SRS：
 
 ```bash
 PLONK_BIN=build/groth16/bin
-PLONK_DATA=build/groth16/plonk-data
 
 "$PLONK_BIN/plonk-gen" fibonacci 10
-"$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" \
+"$PLONK_BIN/plonk-setup" --backend cpu \
   --srs matmul_2.srs.bin fibonacci_10.bin
-"$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" fibonacci_10.bin
-"$PLONK_BIN/plonk-verify" --path "$PLONK_DATA" fibonacci_10.bin
+"$PLONK_BIN/plonk-prove" --backend cpu fibonacci_10.bin
+"$PLONK_BIN/plonk-verify" fibonacci_10.bin
 ```
 
-PLONK 产物默认位于 `build/groth16/plonk-data`。四个程序都可添加 `--profile` 输出阶段耗时。快速构建、端到端测试和分层测试命令如下：
+PLONK 产物默认位于 `build/groth16/plonk-data`。与 Groth16 一样，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖默认产物目录；使用默认目录时无需传入。四个程序都可添加 `--profile` 输出阶段耗时。快速构建、端到端测试和分层测试命令如下：
 
 ```bash
 make plonk-cpu
