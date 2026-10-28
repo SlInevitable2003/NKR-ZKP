@@ -86,10 +86,7 @@ std::vector<Scalar> blind_permutation_polynomial(
     return coefficients;
 }
 
-std::vector<Scalar> coset_evaluations(
-    const std::vector<Scalar> &coefficients,
-    const std::shared_ptr<libfqfft::evaluation_domain<Scalar>> &domain,
-    const Scalar &shift)
+std::vector<Scalar> coset_evaluations(const std::vector<Scalar> &coefficients, const std::shared_ptr<libfqfft::evaluation_domain<Scalar>> &domain, const Scalar &shift)
 {
     std::vector<Scalar> result = coefficients;
     result.resize(domain->m, Scalar::zero());
@@ -271,8 +268,8 @@ public:
         const std::vector<Scalar> z_coset = coset_evaluations(z_coefficients, quotient_domain, key.domain.coset_shift);
         const std::vector<Scalar> pi_coset = coset_evaluations(public_input_coefficients, quotient_domain, key.domain.coset_shift);
 
-        std::vector<Scalar> points(quotient_size);
-        std::vector<Scalar> vanishing(quotient_size);
+        std::vector<Scalar> coset_points(quotient_size);
+        std::vector<Scalar> z_h_evaluations(quotient_size);
         std::vector<Scalar> quotient_denominators(2 * quotient_size);
         std::vector<Scalar> quotient_evaluations(quotient_size);
         Scalar point = key.domain.coset_shift;
@@ -280,17 +277,17 @@ public:
         const std::size_t omega_shift = quotient_size / n;
         const Scalar n_inverse = Scalar(static_cast<long>(n)).inverse();
         for (std::size_t i = 0; i < quotient_size; ++i) {
-            points[i] = point;
+            coset_points[i] = point;
             const Scalar point_to_n = point ^ n;
-            vanishing[i] = point_to_n - Scalar::one();
-            quotient_denominators[i] = vanishing[i];
+            z_h_evaluations[i] = point_to_n - Scalar::one();
+            quotient_denominators[i] = z_h_evaluations[i];
             quotient_denominators[quotient_size + i] = point - Scalar::one();
             point *= quotient_omega;
         }
         libff::batch_invert(quotient_denominators);
         for (std::size_t i = 0; i < quotient_size; ++i) {
-            point = points[i];
-            const Scalar l_1 = vanishing[i] * n_inverse *
+            point = coset_points[i];
+            const Scalar l_1 = z_h_evaluations[i] * n_inverse *
                                quotient_denominators[quotient_size + i];
             const Scalar gate = a_coset[i] * key.fixed.q_l.coset_evaluations[i] +
                                 b_coset[i] * key.fixed.q_r.coset_evaluations[i] +
