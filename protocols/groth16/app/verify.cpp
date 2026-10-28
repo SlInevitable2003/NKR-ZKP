@@ -5,10 +5,12 @@
 #include <vector>
 
 #include "groth16/io.hpp"
-#include "groth16/profile.hpp"
+#include "profile.hpp"
 #include "groth16/protocol.hpp"
 
 using namespace nkr::groth16;
+using nkr::ProfileScope;
+using nkr::configure_profiling;
 
 #ifndef APP_DATA_DIR
 #define APP_DATA_DIR "app/data"

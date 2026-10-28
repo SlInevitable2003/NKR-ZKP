@@ -3,7 +3,7 @@
 #include <chrono>
 #include <string>
 
-namespace nkr::plonk {
+namespace nkr {
 
 void configure_profiling(bool enabled);
 bool profiling_enabled();
@@ -22,4 +22,4 @@ private:
     std::chrono::steady_clock::time_point start_;
 };
 
-} // namespace nkr::plonk
+} // namespace nkr

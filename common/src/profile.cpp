@@ -1,4 +1,4 @@
-#include "groth16/profile.hpp"
+#include "profile.hpp"
 
 #include <iomanip>
 #include <iostream>
@@ -6,14 +6,14 @@
 
 #include "libff/common/profiling.hpp"
 
-namespace nkr::groth16 {
+namespace nkr {
 namespace {
 
 bool profile_enabled = false;
 
 } // namespace
 
-void configure_profiling(bool enabled)
+void configure_profiling(const bool enabled)
 {
     profile_enabled = enabled;
     libff::inhibit_profiling_info = !enabled;
@@ -26,7 +26,9 @@ bool profiling_enabled()
 }
 
 ProfileScope::ProfileScope(std::string label)
-    : enabled_(profiling_enabled()), label_(std::move(label)), start_(std::chrono::steady_clock::now())
+    : enabled_(profiling_enabled()),
+      label_(std::move(label)),
+      start_(std::chrono::steady_clock::now())
 {}
 
 ProfileScope::~ProfileScope()
@@ -38,4 +40,4 @@ ProfileScope::~ProfileScope()
               << elapsed.count() << " ms\n";
 }
 
-} // namespace nkr::groth16
+} // namespace nkr

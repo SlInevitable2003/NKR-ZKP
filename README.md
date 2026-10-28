@@ -4,7 +4,8 @@ NKR-ZKP 是一个实验性的多协议、多后端零知识证明框架。当前
 
 ```text
 common/
-  include/                 共享 BinaryArchive 等主机侧工具
+  include/                 共享 BinaryArchive、Profile 等主机侧工具
+  src/                     共享主机侧工具实现
 
 operators/
   cuda/                    共享的 BN254 CUDA 域、曲线、NTT、MSM 算子
@@ -110,6 +111,61 @@ make groth16-test-hip HIP_ARCH=<gfx-arch> GROTH16_HIP_MATRIX_SIZE=100
 
 `groth16-dcu` 和 `groth16-test-dcu` 分别是 HIP 构建与测试目标的兼容性别名。
 
+## PLONK 构建与运行
+
+PLONK 与 Groth16 采用相同的四阶段程序结构：
+
+```text
+build/groth16/bin/plonk-gen
+build/groth16/bin/plonk-setup
+build/groth16/bin/plonk-prove
+build/groth16/bin/plonk-verify
+```
+
+`gen` 负责产生电路与见证，`setup` 读取电路并产生 SRS、PK 和 VK，`prove` 读取 PK 与见证产生证明，`verify` 读取 VK、公开输入和证明完成验证。只有 `setup` 与 `prove` 接收 `--backend`；`gen` 和 `verify` 是后端无关的公共程序。
+
+当前可完整运行的是 CPU 后端。CUDA/HIP 目录已经保留统一的后端接口，但 PLONK 协议适配尚未实现，因此目前不要向 PLONK 的 `setup` 或 `prove` 传入 `--backend cuda` / `--backend hip`。这不影响 Groth16 使用已有的 CUDA/HIP 后端。
+
+以下命令在仓库根目录构建 PLONK，并完整运行一个规模为 2 的矩阵乘法电路：
+
+```bash
+make groth16-clean
+make plonk-cpu
+
+PLONK_BIN=build/groth16/bin
+PLONK_DATA=build/groth16/plonk-data
+
+"$PLONK_BIN/plonk-gen" --path "$PLONK_DATA" matmul 2
+"$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" matmul_2.bin
+"$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" matmul_2.bin
+"$PLONK_BIN/plonk-verify" --path "$PLONK_DATA" matmul_2.bin
+```
+
+也可以生成 Fibonacci 电路，并显式复用已有的 SRS：
+
+```bash
+PLONK_BIN=build/groth16/bin
+PLONK_DATA=build/groth16/plonk-data
+
+"$PLONK_BIN/plonk-gen" --path "$PLONK_DATA" fibonacci 10
+"$PLONK_BIN/plonk-setup" --backend cpu --path "$PLONK_DATA" \
+  --srs matmul_2.srs.bin fibonacci_10.bin
+"$PLONK_BIN/plonk-prove" --backend cpu --path "$PLONK_DATA" fibonacci_10.bin
+"$PLONK_BIN/plonk-verify" --path "$PLONK_DATA" fibonacci_10.bin
+```
+
+PLONK 产物默认位于 `build/groth16/plonk-data`。四个程序都可添加 `--profile` 输出阶段耗时。快速构建、端到端测试和分层测试命令如下：
+
+```bash
+make plonk-cpu
+make plonk-test-cpu
+make plonk-test-arithmetization
+make plonk-test-cpu-setup
+make plonk-test-cpu-prove-verify
+```
+
+自动生成的 SRS 仅用于本地开发和功能测试，不是可用于生产环境的多方可信设置。更详细的算术化、Transcript、文件格式和 CPU 协议实现说明见 [protocols/plonk/README.md](protocols/plonk/README.md)。
+
 ## 分层规则
 
 - `app/` 只负责解析命令和组织文件流程。
@@ -131,3 +187,5 @@ make groth16-test-hip HIP_ARCH=<gfx-arch> GROTH16_HIP_MATRIX_SIZE=100
 - `GROTH16_BUILD_DIR`：CMake 构建目录，默认为 `build/groth16`；
 - `GROTH16_BIN_DIR`：可执行文件目录，默认为 `build/groth16/bin`；
 - `GROTH16_DATA_DIR`：Groth16 产物目录，默认为 `build/groth16/data`。
+- `PLONK_BIN_DIR`：PLONK 可执行文件目录，默认为 `build/groth16/bin`；
+- `PLONK_DATA_DIR`：PLONK 产物目录，默认为 `build/groth16/plonk-data`。

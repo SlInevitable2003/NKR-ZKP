@@ -39,7 +39,6 @@ add_subdirectory(
 add_library(nkr_groth16_common STATIC
     common/src/backend_registry.cpp
     common/src/io.cpp
-    common/src/profile.cpp
     common/src/protocol.cpp)
 target_compile_features(nkr_groth16_common PUBLIC cxx_std_17)
 target_include_directories(nkr_groth16_common PUBLIC

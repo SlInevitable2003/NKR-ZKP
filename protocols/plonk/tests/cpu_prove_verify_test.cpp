@@ -1,7 +1,7 @@
 #include "plonk/arithmetization.hpp"
 #include "plonk/backend.hpp"
 #include "plonk/io.hpp"
-#include "plonk/profile.hpp"
+#include "profile.hpp"
 #include "plonk/protocol.hpp"
 #include "plonk/transcript.hpp"
 
@@ -11,6 +11,7 @@
 #include <string>
 
 using namespace nkr::plonk;
+using nkr::configure_profiling;
 
 namespace {
 

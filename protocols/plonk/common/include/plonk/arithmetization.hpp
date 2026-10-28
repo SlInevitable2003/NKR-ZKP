@@ -45,11 +45,7 @@ struct Arithmetization {
 };
 
 // A circuit builder for the classic three-wire PLONK gate
-//
 //   q_l * a + q_r * b + q_m * a * b + q_o * c + q_c + PI = 0.
-//
-// It deliberately does not reuse Groth16's R1CS manager: PLONK rows, wire
-// occurrences, public-input rows, and copy constraints are native data here.
 class PlonkishManager {
 public:
     Variable public_variable(const Scalar &value);

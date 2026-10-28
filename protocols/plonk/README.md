@@ -7,6 +7,8 @@
 - `backends/cpu`：基于 libff/libfqfft 的参考后端；
 - `backends/cuda` 和 `backends/hip`：建立在顶层公共算子之上的轻量协议适配层。
 
+协议类型和函数位于 `nkr::plonk`，与 Groth16 的 `nkr::groth16` 对称，避免 `Circuit`、`Proof`、`setup`、`prove`、`verify` 等同名符号冲突。`ProfileScope` 和 `configure_profiling` 不属于任何具体协议，位于顶层共享模块及 `nkr` 命名空间；两个协议使用协议前缀区分计时标签。
+
 原有的 Rust CPU/CUDA 代码已删除。它们基于不同的软件栈，实现的是另一种带查找功能的四线协议，因此不会作为当前框架的实现基础。
 
 当前已实现三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、基于共享 `BinaryArchive` 的产物序列化，以及完整的 `plonk-gen/setup/prove/verify` 命令行流程。低层协议文档见 `docs/plonk_protocol_low_level.pdf`。
@@ -63,6 +65,8 @@ make plonk-test-cpu-prove-verify
 ## 产物序列化与命令行
 
 `common/src/io.cpp` 提供 `circuit`、`witness`、`srs`、`proving-key`、`verification-key`、`proof` 的读写，复用共享的 `BinaryArchive`（见 `common/include/binary_archive.hpp`）。文件以魔数 `LKZ1` 和版本号开头，向量带字节长度前缀；元素按原始内存布局读写，因此要求读写程序使用兼容的 ABI、依赖版本与构建配置。该格式用于本项目程序之间传递产物，不承诺规范化的跨实现编码。
+
+与 Groth16 一样，PLONK 始终使用同名的四个统一程序，不为不同后端分别生成可执行文件。当前 CPU 流程已完整实现；CUDA/HIP 协议适配仍是框架，因此 `plonk-setup` 和 `plonk-prove` 目前只应使用 `--backend cpu`。`plonk-gen` 和 `plonk-verify` 不接收 `--backend`。
 
 `plonk-gen` 目前支持 `matmul` 与 `fibonacci` 两种用例；`plonk-setup` 在未提供 `--srs` 时现场生成并写出 SRS。下面给出两种电路的完整 CPU 命令，其中第二次 Setup 复用第一次生成的 SRS：
 

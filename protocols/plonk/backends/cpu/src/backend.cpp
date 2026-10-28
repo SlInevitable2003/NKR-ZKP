@@ -1,5 +1,5 @@
 #include "plonk/backend.hpp"
-#include "plonk/profile.hpp"
+#include "profile.hpp"
 #include "plonk/protocol.hpp"
 #include "plonk/transcript.hpp"
 

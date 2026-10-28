@@ -83,6 +83,25 @@ bool require_size(const std::vector<T> &column,
         "the requested PLONK backend operation is not implemented yet");
 }
 
+UniversalSrs generate_srs(const std::size_t max_degree)
+{
+    Scalar tau;
+    do {
+        tau = Scalar::random_element();
+    } while (tau == Scalar::zero() || tau == Scalar::one());
+
+    UniversalSrs srs;
+    srs.g1_powers.resize(max_degree + 1);
+    Scalar power = Scalar::one();
+    for (G1 &point : srs.g1_powers) {
+        point = power * G1::one();
+        power *= tau;
+    }
+    srs.g2 = G2::one();
+    srs.tau_g2 = tau * srs.g2;
+    return srs;
+}
+
 bool validate_circuit(const Circuit &circuit, std::string &error)
 {
     const std::size_t n = circuit.domain_size;

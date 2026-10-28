@@ -4,25 +4,23 @@
 #include <string>
 
 #include "plonk/io.hpp"
-#include "plonk/profile.hpp"
+#include "profile.hpp"
 #include "plonk/protocol.hpp"
 
 using namespace nkr::plonk;
+using nkr::ProfileScope;
+using nkr::configure_profiling;
 
 #ifndef APP_DATA_DIR
 #define APP_DATA_DIR "app/data"
 #endif
 
-namespace {
-
-[[noreturn]] void usage(const char *program)
+static void usage(const char *program)
 {
     std::cerr << "Usage: " << program
               << " [--path <dir>] [--profile] <circuit-file>\n";
     std::exit(2);
 }
-
-} // namespace
 
 int main(int argc, char **argv)
 {
@@ -40,11 +38,12 @@ int main(int argc, char **argv)
     }
     if (filename.empty()) usage(argv[0]);
 
+    configure_profiling(profile);
+    Curve::init_public_params();
+
     try {
-        configure_profiling(profile);
-        Curve::init_public_params();
         ProfileScope total("plonk.verify.total");
-        const ArtifactPaths paths = artifact_paths(directory, filename);
+        const auto paths = artifact_paths(directory, filename);
         VerificationKey verification_key;
         Witness witness;
         Proof proof;
@@ -64,7 +63,7 @@ int main(int argc, char **argv)
                   << '\n';
         return ok ? 0 : 1;
     } catch (const std::exception &error) {
-        std::cerr << "plonk-verify: " << error.what() << '\n';
+        std::cerr << "verify: " << error.what() << '\n';
         return 1;
     }
 }

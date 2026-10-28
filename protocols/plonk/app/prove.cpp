@@ -5,31 +5,28 @@
 
 #include "plonk/backend.hpp"
 #include "plonk/io.hpp"
-#include "plonk/profile.hpp"
+#include "profile.hpp"
 #include "plonk/protocol.hpp"
 
 using namespace nkr::plonk;
+using nkr::ProfileScope;
+using nkr::configure_profiling;
 
 #ifndef APP_DATA_DIR
 #define APP_DATA_DIR "app/data"
 #endif
 
-namespace {
-
-[[noreturn]] void usage(const char *program)
+static void usage(const char *program)
 {
     std::cerr << "Usage: " << program
               << " [--backend cpu|cuda|hip] [--path <dir>] [--profile] <circuit-file>\n";
     std::exit(2);
 }
 
-} // namespace
-
 int main(int argc, char **argv)
 {
     std::filesystem::path directory = APP_DATA_DIR;
-    std::string backend_name = "cpu";
-    std::string filename;
+    std::string backend_name = "cpu", filename;
     bool profile = false;
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
@@ -43,11 +40,12 @@ int main(int argc, char **argv)
     }
     if (filename.empty()) usage(argv[0]);
 
+    configure_profiling(profile);
+    Curve::init_public_params();
+
     try {
-        configure_profiling(profile);
-        Curve::init_public_params();
         ProfileScope total("plonk.prove.total");
-        const ArtifactPaths paths = artifact_paths(directory, filename);
+        const auto paths = artifact_paths(directory, filename);
         ProvingKey proving_key;
         Witness witness;
         {
@@ -77,7 +75,7 @@ int main(int argc, char **argv)
         std::cout << "Wrote " << paths.proof << '\n';
         return 0;
     } catch (const std::exception &error) {
-        std::cerr << "plonk-prove: " << error.what() << '\n';
+        std::cerr << "prove: " << error.what() << '\n';
         return 1;
     }
 }

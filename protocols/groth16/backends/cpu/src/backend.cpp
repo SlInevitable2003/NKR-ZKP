@@ -7,7 +7,7 @@
 
 #include "libff/algebra/scalar_multiplication/multiexp.hpp"
 #include "libfqfft/evaluation_domain/get_evaluation_domain.hpp"
-#include "groth16/profile.hpp"
+#include "profile.hpp"
 
 namespace nkr::groth16 {
 namespace {

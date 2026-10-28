@@ -8,6 +8,7 @@ namespace nkr::plonk {
 
 [[noreturn]] void throw_scaffold_only();
 
+UniversalSrs generate_srs(std::size_t max_degree);
 bool validate_circuit(const Circuit &circuit, std::string &error);
 bool validate_srs(const UniversalSrs &srs, std::size_t domain_size, std::string &error);
 bool validate_proving_key(const ProvingKey &key, std::string &error);

@@ -1,7 +1,7 @@
 #include "plonk/arithmetization.hpp"
 #include "plonk/backend.hpp"
 #include "plonk/io.hpp"
-#include "plonk/profile.hpp"
+#include "profile.hpp"
 #include "plonk/protocol.hpp"
 
 #include <array>
@@ -16,6 +16,7 @@
 #include "libfqfft/evaluation_domain/get_evaluation_domain.hpp"
 
 using namespace nkr::plonk;
+using nkr::configure_profiling;
 
 namespace {
 

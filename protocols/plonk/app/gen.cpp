@@ -8,29 +8,17 @@
 
 #include "plonk/arithmetization.hpp"
 #include "plonk/io.hpp"
-#include "plonk/profile.hpp"
+#include "profile.hpp"
 
 using namespace nkr::plonk;
+using nkr::ProfileScope;
+using nkr::configure_profiling;
 
 #ifndef APP_DATA_DIR
 #define APP_DATA_DIR "app/data"
 #endif
 
-namespace {
-
-[[noreturn]] void usage(const char *program)
-{
-    std::cerr << "Usage: " << program << " [--path <dir>] [--profile] <case> [params...]\n"
-              << "  cases:\n"
-              << "    matmul <size>       matrix multiplication of dimension <size>\n"
-              << "    fibonacci <steps>   Fibonacci recurrence with <steps> >= 2\n"
-              << "  Outputs:\n"
-              << "    <stem>.bin          PLONK circuit\n"
-              << "    <stem>.witness.bin  satisfying execution trace\n";
-    std::exit(2);
-}
-
-std::size_t parse_size(const std::string &text)
+static std::size_t parse_size(const std::string &text)
 {
     std::size_t consumed = 0;
     const unsigned long long parsed = std::stoull(text, &consumed);
@@ -41,14 +29,14 @@ std::size_t parse_size(const std::string &text)
     return static_cast<std::size_t>(parsed);
 }
 
-std::size_t checked_product(const std::size_t lhs, const std::size_t rhs)
+static std::size_t checked_product(const std::size_t lhs, const std::size_t rhs)
 {
     if (rhs != 0 && lhs > std::numeric_limits<std::size_t>::max() / rhs)
         throw std::overflow_error("circuit size overflows size_t");
     return lhs * rhs;
 }
 
-void build_matmul(PlonkishManager &manager, const std::size_t size)
+static void build_matmul(PlonkishManager &manager, const std::size_t size)
 {
     const std::size_t square = checked_product(size, size);
     const std::size_t cube = checked_product(square, size);
@@ -59,6 +47,7 @@ void build_matmul(PlonkishManager &manager, const std::size_t size)
 
     std::vector<Scalar> a_values(square);
     std::vector<Scalar> b_values(square);
+    #pragma omp parallel for
     for (std::size_t i = 0; i < square; ++i) {
         a_values[i] = Scalar::random_element();
         b_values[i] = Scalar::random_element();
@@ -100,7 +89,7 @@ void build_matmul(PlonkishManager &manager, const std::size_t size)
     }
 }
 
-void build_fibonacci(PlonkishManager &manager, const std::size_t steps)
+static void build_fibonacci(PlonkishManager &manager, const std::size_t steps)
 {
     if (steps < 2) throw std::invalid_argument("fibonacci steps must be at least 2");
     const Scalar first_value = Scalar::random_element();
@@ -124,12 +113,21 @@ void build_fibonacci(PlonkishManager &manager, const std::size_t steps)
     manager.assert_equal(current, expected);
 }
 
-} // namespace
-
-int main(int argc, char **argv)
+static void usage(const char *prog)
 {
-    std::filesystem::path directory = APP_DATA_DIR;
+    std::cerr << "Usage: " << prog << " [--path <dir>] [--profile] <case> [params...]\n"
+              << "  cases:\n"
+              << "    matmul <size>       matrix multiplication of dimension <size>\n"
+              << "    fibonacci <steps>   Fibonacci recurrence with <steps> >= 2\n"
+              << "  Outputs (in " APP_DATA_DIR "):\n"
+              << "    <stem>.bin          PLONK circuit\n"
+              << "    <stem>.witness.bin  satisfying execution trace\n";
+    std::exit(1);
+}
+
+int main(int argc, char **argv) {
     bool profile = false;
+    std::filesystem::path directory = APP_DATA_DIR;
     std::vector<std::string> arguments;
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
@@ -141,9 +139,10 @@ int main(int argc, char **argv)
     }
     if (arguments.size() != 2) usage(argv[0]);
 
+    configure_profiling(profile);
+    Curve::init_public_params();
+
     try {
-        configure_profiling(profile);
-        Curve::init_public_params();
         ProfileScope total("plonk.gen.total");
         const std::string case_name = arguments[0];
         const std::size_t parameter = parse_size(arguments[1]);
@@ -169,7 +168,7 @@ int main(int argc, char **argv)
             output = manager.finalize();
         }
         std::filesystem::create_directories(directory);
-        const ArtifactPaths paths = artifact_paths(directory, stem);
+        const auto paths = artifact_paths(directory, stem);
         {
             ProfileScope stage("plonk.gen.write_artifacts");
             write_circuit(paths.circuit, output.circuit);
@@ -183,7 +182,7 @@ int main(int argc, char **argv)
                   << "Wrote witness to " << paths.witness << '\n';
         return 0;
     } catch (const std::exception &error) {
-        std::cerr << "plonk-gen: " << error.what() << '\n';
+        std::cerr << "gen: " << error.what() << '\n';
         return 1;
     }
 }

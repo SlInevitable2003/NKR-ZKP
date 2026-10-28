@@ -33,7 +33,7 @@ R1CS、QAP、置换乘积、商多项式方程、Transcript 和证明容器不�
 
 ## 共享主机侧工具
 
-`common/` 存放协议无关的主机侧工具，目前只有 `BinaryArchive`（`common/include/binary_archive.hpp`）：一个带魔数、版本号和字节长度前缀的最小二进制归档。Groth16 与 PLONK 的产物 I/O 都复用它，不再各自维护一份序列化代码。
+`common/` 存放协议无关的主机侧工具。目前包括 `BinaryArchive`（`common/include/binary_archive.hpp`）和性能计时工具（`common/include/profile.hpp`）。前者是带魔数、版本号和字节长度前缀的最小二进制归档，Groth16 与 PLONK 的产物 I/O 都复用它；后者位于 `nkr` 命名空间，由两个协议共用，具体计时标签仍以 `groth16.*` 和 `plonk.*` 区分。
 
 ## 协议目录结构
 
@@ -50,7 +50,7 @@ protocols/<protocol>/
   tests/
 ```
 
-`app/` 只包含轻量的命令行入口。`common/` 负责协议类型、公共 API、校验、产物 I/O、验证和后端选择。各后端目录负责平台适配与协议专属的融合内核。公共头文件只能使用主机侧类型。
+`app/` 只包含轻量的命令行入口。协议类型分别放在 `nkr::groth16` 和 `nkr::plonk` 子命名空间，避免两套 `Circuit`、`Proof` 和协议函数发生冲突。`common/` 负责协议类型、公共 API、校验、产物 I/O、验证和后端选择。各后端目录负责平台适配与协议专属的融合内核。公共头文件只能使用主机侧类型。
 
 Groth16 是外部 `gen/setup/prove/verify` 组织方式的可用参考，但其当前较粗粒度的 `Backend::setup/prove` 接口不构成 PLONK 内部实现的限制。PLONK 可以采用按轮次组织的会话，在公共层控制 Transcript 顺序的同时，让多项式常驻 GPU。
 

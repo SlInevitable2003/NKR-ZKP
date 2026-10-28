@@ -3,7 +3,7 @@
 #include <memory>
 
 #include "api.h"
-#include "groth16/profile.hpp"
+#include "profile.hpp"
 #include "libff/common/utils.hpp"
 
 namespace nkr::groth16 {

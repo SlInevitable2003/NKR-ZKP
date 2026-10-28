@@ -9,7 +9,7 @@
 #include "libsnark/common/default_types/r1cs_ppzksnark_pp.hpp"
 
 #include "groth16/io.hpp"
-#include "groth16/profile.hpp"
+#include "profile.hpp"
 #include "r1cs/r1cs.hpp"
 
 using namespace std;
@@ -95,9 +95,9 @@ int main(int argc, char *argv[]) {
     }
     if (arguments.empty()) usage(argv[0]);
 
-    nkr::groth16::configure_profiling(profile);
+    nkr::configure_profiling(profile);
     ppT::init_public_params();
-    nkr::groth16::ProfileScope total("groth16.gen.total");
+    nkr::ProfileScope total("groth16.gen.total");
     const string case_name = arguments[0];
 
     R1CSManager<FieldT> mgr;
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
         const size_t s = (size_t)atoi(arguments[1].c_str());
         if (s == 0) usage(argv[0]);
         {
-            nkr::groth16::ProfileScope stage("groth16.gen.build_matmul");
+            nkr::ProfileScope stage("groth16.gen.build_matmul");
             build_matmul(mgr, assignment, s);
         }
         stem = "matmul_" + to_string(s);
@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
     nkr::groth16::Circuit out;
     vector<FieldT> z;
     {
-        nkr::groth16::ProfileScope stage("groth16.gen.finalize_circuit");
+        nkr::ProfileScope stage("groth16.gen.finalize_circuit");
         finalize_circuit(mgr, assignment, out, z);
     }
 
@@ -134,13 +134,13 @@ int main(int argc, char *argv[]) {
     const auto paths = nkr::groth16::artifact_paths(std::filesystem::path(data_dir), stem);
 
     {
-        nkr::groth16::ProfileScope stage("groth16.gen.write_circuit");
+        nkr::ProfileScope stage("groth16.gen.write_circuit");
         nkr::groth16::write_circuit(paths.r1cs, out);
     }
     cout << "Wrote R1CS to " << paths.r1cs << endl;
 
     {
-        nkr::groth16::ProfileScope stage("groth16.gen.write_witness");
+        nkr::ProfileScope stage("groth16.gen.write_witness");
         nkr::groth16::write_witness(paths.witness, z);
     }
     cout << "Wrote witness to " << paths.witness << endl;
