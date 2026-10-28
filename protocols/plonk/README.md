@@ -73,7 +73,7 @@ make plonk-test-cpu-prove-verify
 ```bash
 make plonk-cpu
 
-PLONK_BIN=build/groth16/bin
+PLONK_BIN=build/plonk/bin
 
 "$PLONK_BIN/plonk-gen" matmul 2
 "$PLONK_BIN/plonk-setup" --backend cpu matmul_2.bin
@@ -87,4 +87,4 @@ PLONK_BIN=build/groth16/bin
 "$PLONK_BIN/plonk-verify" fibonacci_10.bin
 ```
 
-上述命令使用编译时配置的默认产物目录 `build/groth16/plonk-data`。与 Groth16 相同，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖该目录；使用默认值时无需传入。自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。快速回归仍可执行 `make plonk-test-cpu`。
+上述命令使用独立的 `build/plonk` 构建树，默认产物目录为 `build/plonk/data`。与 Groth16 相同，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖该目录；使用默认值时无需传入。自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。快速回归仍可执行 `make plonk-test-cpu`。

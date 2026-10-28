@@ -116,10 +116,10 @@ make groth16-test-hip HIP_ARCH=<gfx-arch> GROTH16_HIP_MATRIX_SIZE=100
 PLONK 与 Groth16 采用相同的四阶段程序结构：
 
 ```text
-build/groth16/bin/plonk-gen
-build/groth16/bin/plonk-setup
-build/groth16/bin/plonk-prove
-build/groth16/bin/plonk-verify
+build/plonk/bin/plonk-gen
+build/plonk/bin/plonk-setup
+build/plonk/bin/plonk-prove
+build/plonk/bin/plonk-verify
 ```
 
 `gen` 负责产生电路与见证，`setup` 读取电路并产生 SRS、PK 和 VK，`prove` 读取 PK 与见证产生证明，`verify` 读取 VK、公开输入和证明完成验证。只有 `setup` 与 `prove` 接收 `--backend`；`gen` 和 `verify` 是后端无关的公共程序。
@@ -130,8 +130,7 @@ build/groth16/bin/plonk-verify
 
 ```bash
 make plonk-cpu
-
-PLONK_BIN=build/groth16/bin
+PLONK_BIN=build/plonk/bin
 
 "$PLONK_BIN/plonk-gen" matmul 2
 "$PLONK_BIN/plonk-setup" --backend cpu matmul_2.bin
@@ -142,7 +141,7 @@ PLONK_BIN=build/groth16/bin
 也可以生成 Fibonacci 电路，并显式复用已有的 SRS：
 
 ```bash
-PLONK_BIN=build/groth16/bin
+PLONK_BIN=build/plonk/bin
 
 "$PLONK_BIN/plonk-gen" fibonacci 10
 "$PLONK_BIN/plonk-setup" --backend cpu \
@@ -151,7 +150,7 @@ PLONK_BIN=build/groth16/bin
 "$PLONK_BIN/plonk-verify" fibonacci_10.bin
 ```
 
-PLONK 产物默认位于 `build/groth16/plonk-data`。与 Groth16 一样，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖默认产物目录；使用默认目录时无需传入。四个程序都可添加 `--profile` 输出阶段耗时。快速构建、端到端测试和分层测试命令如下：
+PLONK 使用独立的 `build/plonk` 构建树，产物默认位于 `build/plonk/data`。与 Groth16 一样，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖默认产物目录；使用默认目录时无需传入。四个程序都可添加 `--profile` 输出阶段耗时。快速构建、端到端测试和分层测试命令如下：
 
 ```bash
 make plonk-cpu
@@ -185,5 +184,6 @@ make plonk-test-cpu-prove-verify
 - `GROTH16_BUILD_DIR`：CMake 构建目录，默认为 `build/groth16`；
 - `GROTH16_BIN_DIR`：可执行文件目录，默认为 `build/groth16/bin`；
 - `GROTH16_DATA_DIR`：Groth16 产物目录，默认为 `build/groth16/data`。
-- `PLONK_BIN_DIR`：PLONK 可执行文件目录，默认为 `build/groth16/bin`；
-- `PLONK_DATA_DIR`：PLONK 产物目录，默认为 `build/groth16/plonk-data`。
+- `PLONK_BUILD_DIR`：PLONK CMake 构建目录，默认为 `build/plonk`；
+- `PLONK_BIN_DIR`：PLONK 可执行文件目录，默认为 `build/plonk/bin`；
+- `PLONK_DATA_DIR`：PLONK 产物目录，默认为 `build/plonk/data`。

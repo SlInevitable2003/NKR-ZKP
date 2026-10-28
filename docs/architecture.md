@@ -71,7 +71,7 @@ Transcript、挑战顺序、证明字段和多项式次数遵循 `docs/plonk_pro
 
 ## 构建模型
 
-CPU 支持始终存在。每个 CMake 构建目录通过 `NKR_ZKP_ACCELERATOR` 在 `NONE`、`CUDA` 和 `HIP` 中最多选择一种。这样既可避免混用不兼容的编译器驱动与运行时，又能在构建中保留 CPU 和已选加速器之间的运行时后端选择。
+CPU 支持始终存在。Groth16 和 PLONK 使用独立的 CMake 构建树，默认分别是 `build/groth16` 和 `build/plonk`；Makefile 分别以 `NKR_ZKP_PROTOCOL=GROTH16` 和 `NKR_ZKP_PROTOCOL=PLONK` 配置它们，因此不会生成另一个协议的构建规则、可执行文件或运行产物。每个 CMake 构建目录通过 `NKR_ZKP_ACCELERATOR` 在 `NONE`、`CUDA` 和 `HIP` 中最多选择一种。这样既可避免混用不兼容的编译器驱动与运行时，又能在构建中保留 CPU 和已选加速器之间的运行时后端选择。
 
 内置的 LightZK 依赖快照位于 `third_party/lightzk/depends`。libff 的 x86-64 汇编仅在匹配的主机上启用，其他 CPU 架构使用可移植实现。
 
