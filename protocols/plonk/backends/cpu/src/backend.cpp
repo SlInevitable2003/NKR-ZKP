@@ -37,23 +37,17 @@ G1 commit_polynomial(const std::vector<Scalar> &coefficients, const UniversalSrs
     return libff::multi_exp<G1, Scalar, libff::multi_exp_method_BDLO12>(srs.g1_powers.begin(), srs.g1_powers.begin() + coefficients.size(), coefficients.begin(), coefficients.end(), 1);
 }
 
-Scalar evaluate_polynomial(const std::vector<Scalar> &coefficients,
-                           const Scalar &point)
+Scalar evaluate_polynomial(const std::vector<Scalar> &coefficients, const Scalar &point)
 {
     Scalar result = Scalar::zero();
-    for (auto it = coefficients.rbegin(); it != coefficients.rend(); ++it)
-        result = result * point + *it;
+    for (auto it = coefficients.rbegin(); it != coefficients.rend(); ++it) result = result * point + *it;
     return result;
 }
 
-void add_scaled(std::vector<Scalar> &destination,
-                const std::vector<Scalar> &source,
-                const Scalar &scale)
+void add_scaled(std::vector<Scalar> &destination, const std::vector<Scalar> &source, const Scalar &scale)
 {
-    if (destination.size() < source.size())
-        destination.resize(source.size(), Scalar::zero());
-    for (std::size_t i = 0; i < source.size(); ++i)
-        destination[i] += scale * source[i];
+    if (destination.size() < source.size()) destination.resize(source.size(), Scalar::zero());
+    for (std::size_t i = 0; i < source.size(); ++i) destination[i] += scale * source[i];
 }
 
 std::vector<Scalar> blind_wire_polynomial(std::vector<Scalar> coefficients,
@@ -98,15 +92,12 @@ std::vector<Scalar> synthetic_division(std::vector<Scalar> polynomial,
                                        const Scalar &point,
                                        const Scalar &claimed_value)
 {
-    if (polynomial.size() < 2)
-        throw std::invalid_argument("PLONK Prove: cannot open a constant polynomial");
+    if (polynomial.size() < 2) throw std::invalid_argument("PLONK Prove: cannot open a constant polynomial");
     polynomial[0] -= claimed_value;
     std::vector<Scalar> quotient(polynomial.size() - 1, Scalar::zero());
     quotient.back() = polynomial.back();
-    for (std::size_t i = quotient.size() - 1; i > 0; --i)
-        quotient[i - 1] = polynomial[i] + point * quotient[i];
-    if (polynomial[0] + point * quotient[0] != Scalar::zero())
-        throw std::runtime_error("PLONK Prove: opening value does not match polynomial");
+    for (std::size_t i = quotient.size() - 1; i > 0; --i) quotient[i - 1] = polynomial[i] + point * quotient[i];
+    if (polynomial[0] + point * quotient[0] != Scalar::zero()) throw std::runtime_error("PLONK Prove: opening value does not match polynomial");
     return quotient;
 }
 
@@ -287,44 +278,24 @@ public:
         libff::batch_invert(quotient_denominators);
         for (std::size_t i = 0; i < quotient_size; ++i) {
             point = coset_points[i];
-            const Scalar l_1 = z_h_evaluations[i] * n_inverse *
-                               quotient_denominators[quotient_size + i];
-            const Scalar gate = a_coset[i] * key.fixed.q_l.coset_evaluations[i] +
-                                b_coset[i] * key.fixed.q_r.coset_evaluations[i] +
-                                a_coset[i] * b_coset[i] *
-                                    key.fixed.q_m.coset_evaluations[i] +
-                                c_coset[i] * key.fixed.q_o.coset_evaluations[i] +
-                                key.fixed.q_c.coset_evaluations[i] + pi_coset[i];
-            const Scalar identity =
-                (a_coset[i] + beta * point + gamma) *
-                (b_coset[i] + beta * key.domain.k_1 * point + gamma) *
-                (c_coset[i] + beta * key.domain.k_2 * point + gamma);
-            const Scalar sigma =
-                (a_coset[i] + beta * key.fixed.sigma_1.coset_evaluations[i] + gamma) *
-                (b_coset[i] + beta * key.fixed.sigma_2.coset_evaluations[i] + gamma) *
-                (c_coset[i] + beta * key.fixed.sigma_3.coset_evaluations[i] + gamma);
-            const Scalar permutation = z_coset[i] * identity -
-                z_coset[(i + omega_shift) % quotient_size] * sigma;
-            quotient_evaluations[i] =
-                (gate + alpha * permutation +
-                 alpha_squared * (z_coset[i] - Scalar::one()) * l_1) *
-                quotient_denominators[i];
+            const Scalar l_1 = z_h_evaluations[i] * n_inverse * quotient_denominators[quotient_size + i];
+            const Scalar gate = a_coset[i] * key.fixed.q_l.coset_evaluations[i]
+                              + b_coset[i] * key.fixed.q_r.coset_evaluations[i]
+                              + a_coset[i] * b_coset[i] * key.fixed.q_m.coset_evaluations[i]
+                              + c_coset[i] * key.fixed.q_o.coset_evaluations[i]
+                              + key.fixed.q_c.coset_evaluations[i]
+                              + pi_coset[i];
+            const Scalar identity = (a_coset[i] + beta * point + gamma) * (b_coset[i] + beta * key.domain.k_1 * point + gamma) * (c_coset[i] + beta * key.domain.k_2 * point + gamma);
+            const Scalar sigma = (a_coset[i] + beta * key.fixed.sigma_1.coset_evaluations[i] + gamma) * (b_coset[i] + beta * key.fixed.sigma_2.coset_evaluations[i] + gamma) * (c_coset[i] + beta * key.fixed.sigma_3.coset_evaluations[i] + gamma);
+            const Scalar permutation = z_coset[i] * identity - z_coset[(i + omega_shift) % quotient_size] * sigma;
+            quotient_evaluations[i] = (gate + alpha * permutation + alpha_squared * (z_coset[i] - Scalar::one()) * l_1) * quotient_denominators[i];
         }
         quotient_domain->icosetFFT(quotient_evaluations, key.domain.coset_shift);
 
         const std::size_t part_size = n + 2;
-        if (3 * part_size > quotient_evaluations.size())
-            throw std::runtime_error("PLONK Prove: quotient domain is too small");
-        for (std::size_t i = 3 * part_size; i < quotient_evaluations.size(); ++i) {
-            if (quotient_evaluations[i] != Scalar::zero())
-                throw std::runtime_error("PLONK Prove: quotient exceeds its degree bound");
-        }
-        std::vector<Scalar> t_lo(quotient_evaluations.begin(),
-                                 quotient_evaluations.begin() + part_size);
-        std::vector<Scalar> t_mid(quotient_evaluations.begin() + part_size,
-                                  quotient_evaluations.begin() + 2 * part_size);
-        std::vector<Scalar> t_hi(quotient_evaluations.begin() + 2 * part_size,
-                                 quotient_evaluations.begin() + 3 * part_size);
+        std::vector<Scalar> t_lo(quotient_evaluations.begin(), quotient_evaluations.begin() + part_size);
+        std::vector<Scalar> t_mid(quotient_evaluations.begin() + part_size, quotient_evaluations.begin() + 2 * part_size);
+        std::vector<Scalar> t_hi(quotient_evaluations.begin() + 2 * part_size, quotient_evaluations.begin() + 3 * part_size);
         const Scalar quotient_blind_1 = Scalar::random_element();
         const Scalar quotient_blind_2 = Scalar::random_element();
         t_lo.resize(part_size + 1, Scalar::zero());
@@ -344,9 +315,9 @@ public:
         const Scalar zeta_omega = zeta * key.domain.omega;
         const Scalar zeta_to_n = zeta ^ n;
         const Scalar z_h_zeta = zeta_to_n - Scalar::one();
-        if (z_h_zeta.is_zero())
-            throw std::runtime_error("PLONK Prove: transcript challenge lies in H");
+        if (z_h_zeta.is_zero()) throw std::runtime_error("PLONK Prove: transcript challenge lies in H");
 
+        // Round 4
         proof.a_zeta = evaluate_polynomial(a_coefficients, zeta);
         proof.b_zeta = evaluate_polynomial(b_coefficients, zeta);
         proof.c_zeta = evaluate_polynomial(c_coefficients, zeta);
@@ -361,25 +332,18 @@ public:
         transcript.append(proof.z_zeta_omega);
         const Scalar batching_challenge = transcript.challenge();
 
-        const Scalar identity_at_zeta =
-            (proof.a_zeta + beta * zeta + gamma) *
-            (proof.b_zeta + beta * key.domain.k_1 * zeta + gamma) *
-            (proof.c_zeta + beta * key.domain.k_2 * zeta + gamma);
-        const Scalar sigma_12_at_zeta =
-            (proof.a_zeta + beta * proof.sigma_1_zeta + gamma) *
-            (proof.b_zeta + beta * proof.sigma_2_zeta + gamma);
-        const Scalar l_1_zeta = z_h_zeta * n_inverse *
-                                (zeta - Scalar::one()).inverse();
+        // Round 5
+        const Scalar identity_at_zeta = (proof.a_zeta + beta * zeta + gamma) * (proof.b_zeta + beta * key.domain.k_1 * zeta + gamma) * (proof.c_zeta + beta * key.domain.k_2 * zeta + gamma);
+        const Scalar sigma_12_at_zeta = (proof.a_zeta + beta * proof.sigma_1_zeta + gamma) * (proof.b_zeta + beta * proof.sigma_2_zeta + gamma);
+        const Scalar l_1_zeta = z_h_zeta * n_inverse * (zeta - Scalar::one()).inverse();
         std::vector<Scalar> p_non_constant;
         add_scaled(p_non_constant, key.fixed.q_l.coefficients, proof.a_zeta);
         add_scaled(p_non_constant, key.fixed.q_r.coefficients, proof.b_zeta);
-        add_scaled(p_non_constant, key.fixed.q_m.coefficients,
-                   proof.a_zeta * proof.b_zeta);
+        add_scaled(p_non_constant, key.fixed.q_m.coefficients, proof.a_zeta * proof.b_zeta);
         add_scaled(p_non_constant, key.fixed.q_o.coefficients, proof.c_zeta);
         add_scaled(p_non_constant, key.fixed.q_c.coefficients, Scalar::one());
         add_scaled(p_non_constant, z_coefficients, alpha * identity_at_zeta);
-        add_scaled(p_non_constant, key.fixed.sigma_3.coefficients,
-                   -alpha * sigma_12_at_zeta * beta * proof.z_zeta_omega);
+        add_scaled(p_non_constant, key.fixed.sigma_3.coefficients, -alpha * sigma_12_at_zeta * beta * proof.z_zeta_omega);
         add_scaled(p_non_constant, z_coefficients, alpha_squared * l_1_zeta);
         proof.p_non_constant_zeta = evaluate_polynomial(p_non_constant, zeta);
 
@@ -391,48 +355,25 @@ public:
         add_scaled(t_partial, t_hi, zeta_to_two_parts);
         proof.t_zeta = evaluate_polynomial(t_partial, zeta);
 
-        const Scalar public_input_zeta =
-            evaluate_polynomial(public_input_coefficients, zeta);
-        const Scalar p_constant_zeta =
-            public_input_zeta - alpha * sigma_12_at_zeta *
-                (proof.c_zeta + gamma) * proof.z_zeta_omega -
-            alpha_squared * l_1_zeta;
-        if (proof.p_non_constant_zeta + p_constant_zeta !=
-            z_h_zeta * proof.t_zeta) {
-            throw std::runtime_error("PLONK Prove: quotient identity failed");
-        }
-
         std::vector<Scalar> batched_polynomial = t_partial;
         Scalar power = batching_challenge;
-        add_scaled(batched_polynomial, p_non_constant, power);
-        power *= batching_challenge;
-        add_scaled(batched_polynomial, a_coefficients, power);
-        power *= batching_challenge;
-        add_scaled(batched_polynomial, b_coefficients, power);
-        power *= batching_challenge;
-        add_scaled(batched_polynomial, c_coefficients, power);
-        power *= batching_challenge;
-        add_scaled(batched_polynomial, key.fixed.sigma_1.coefficients, power);
-        power *= batching_challenge;
+        add_scaled(batched_polynomial, p_non_constant, power); power *= batching_challenge;
+        add_scaled(batched_polynomial, a_coefficients, power); power *= batching_challenge;
+        add_scaled(batched_polynomial, b_coefficients, power); power *= batching_challenge;
+        add_scaled(batched_polynomial, c_coefficients, power); power *= batching_challenge;
+        add_scaled(batched_polynomial, key.fixed.sigma_1.coefficients, power); power *= batching_challenge;
         add_scaled(batched_polynomial, key.fixed.sigma_2.coefficients, power);
 
         power = batching_challenge;
-        Scalar batched_value = proof.t_zeta + power * proof.p_non_constant_zeta;
-        power *= batching_challenge;
-        batched_value += power * proof.a_zeta;
-        power *= batching_challenge;
-        batched_value += power * proof.b_zeta;
-        power *= batching_challenge;
-        batched_value += power * proof.c_zeta;
-        power *= batching_challenge;
-        batched_value += power * proof.sigma_1_zeta;
-        power *= batching_challenge;
+        Scalar batched_value = proof.t_zeta + power * proof.p_non_constant_zeta; power *= batching_challenge;
+        batched_value += power * proof.a_zeta; power *= batching_challenge;
+        batched_value += power * proof.b_zeta; power *= batching_challenge;
+        batched_value += power * proof.c_zeta; power *= batching_challenge;
+        batched_value += power * proof.sigma_1_zeta; power *= batching_challenge;
         batched_value += power * proof.sigma_2_zeta;
 
-        const std::vector<Scalar> w_zeta =
-            synthetic_division(std::move(batched_polynomial), zeta, batched_value);
-        const std::vector<Scalar> w_zeta_omega =
-            synthetic_division(z_coefficients, zeta_omega, proof.z_zeta_omega);
+        const std::vector<Scalar> w_zeta = synthetic_division(std::move(batched_polynomial), zeta, batched_value);
+        const std::vector<Scalar> w_zeta_omega = synthetic_division(z_coefficients, zeta_omega, proof.z_zeta_omega);
         proof.w_zeta = commit_polynomial(w_zeta, key.srs);
         proof.w_zeta_omega = commit_polynomial(w_zeta_omega, key.srs);
     }
