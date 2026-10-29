@@ -7,6 +7,7 @@
 #include "msm/large_msm.cuh"
 #include "msm/msm.cuh"
 #include "ntt/ntt.cuh"
+#include "polynomial/polynomial.cuh"
 #include "utils/arith.cuh"
 #include "utils/arena.cuh"
 #include "utils/binary_archive.cuh"

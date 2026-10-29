@@ -27,7 +27,7 @@ CUDA 和 HIP 共用接口约定和测试向量，但不共用内核源码。二�
 - NTT/iNTT 及陪集变体；
 - G1/G2 MSM；
 - 设备内存分配、流、错误处理和性能分析钩子；
-- 未来可复用的通用扫描、前缀积和批量求逆原语。
+- 通用递归 scan、前缀积、逐点求逆、多项式求值和综合除法。
 
 R1CS、QAP、置换乘积、商多项式方程、Transcript 和证明容器不属于算子层。
 
@@ -59,13 +59,13 @@ Groth16 是外部 `gen/setup/prove/verify` 组织方式的可用参考，但其�
 
 ## PLONK 范围
 
-PLONK 已实现独立的三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify 和产物 I/O；CUDA/HIP 的协议适配仍是框架。已删除的 Rust 代码基于另一条 BLS12 系列曲线，实现的是带查找功能的四线系统，因此不会作为新实现的基础。当前实现范围为：
+PLONK 已实现独立的三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、CUDA Prove 和产物 I/O；CUDA Setup 有意复用 CPU Setup，HIP 协议适配仍是框架。已删除的 Rust 代码基于另一条 BLS12 系列曲线，实现的是带查找功能的四线系统，因此不会作为新实现的基础。当前实现范围为：
 
 - BN254/ALT_BN128；
 - KZG 承诺；
 - 经典三线算术门；
 - 置换大乘积；
-- 先完成 CPU 参考实现，再基于公共算子增加 CUDA 和 HIP 适配层。
+- 以 CPU 实现作为参考，通过公共算子维护 CUDA 适配层，后续再补齐 HIP。
 
 Transcript、挑战顺序、证明字段和多项式次数遵循 `docs/plonk_protocol_low_level.pdf`。Transcript 采用 SHA3-256，并使用“追加消息、挑战后以摘要重置状态”的强 Fiat–Shamir 结构；证明产物继续使用共享 `BinaryArchive`。
 

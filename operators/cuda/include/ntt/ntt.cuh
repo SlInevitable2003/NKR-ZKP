@@ -32,9 +32,9 @@ class NTTContext {
 public:
     NTTContext(size_t scale_, HostFT omega, HostFT coset) : scale(scale_) {
         assert((scale & (scale - 1)) == 0 && "Scale must be a power of 2");
-        assert(scale >= 2048 && "Scale must be at least 2048");
+        assert(scale >= 2 && "Scale must be at least 2");
 
-        HostFT scale_in_field{scale};
+        HostFT scale_in_field(static_cast<long>(scale));
         
         arena.register_alloc(scale_inverse, 1);
         arena.register_alloc(omega_power_table, scale);

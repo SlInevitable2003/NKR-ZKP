@@ -31,7 +31,7 @@ CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各
 ## 当前状态
 
 - Groth16 已有可用的 CPU、CUDA 和 HIP 后端。CPU 后端始终参与构建；配置时可以选择 CUDA 或 HIP 加速后端。
-- PLONK 已实现独立的三线 Plonkish 算术化 Manager、SHA3-256 Transcript，以及 CPU Setup、Prove 和 Verify；电路、见证、SRS、PK/VK 与证明均通过共享 `BinaryArchive` 读写。CUDA/HIP 的 PLONK 协议适配仍是框架。
+- PLONK 已实现独立的三线 Plonkish 算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify 和 CUDA Prove；电路、见证、SRS、PK/VK 与证明均通过共享 `BinaryArchive` 读写。CUDA Setup 复用 CPU Setup，HIP 协议适配目前仍是框架。
 - 原有的 Rust PLONK CPU/CUDA 代码已删除。新实现计划以 `docs/plonk_protocol_low_level.pdf` 描述的 BN254、KZG 方案为准。
 - Winterfell 仍作为独立的 Rust CPU 实现保留。
 
@@ -124,7 +124,9 @@ build/plonk/bin/plonk-verify
 
 `gen` 负责产生电路与见证，`setup` 读取电路并产生 SRS、PK 和 VK，`prove` 读取 PK 与见证产生证明，`verify` 读取 VK、公开输入和证明完成验证。只有 `setup` 与 `prove` 接收 `--backend`；`gen` 和 `verify` 是后端无关的公共程序。
 
-当前可完整运行的是 CPU 后端。CUDA/HIP 目录已经保留统一的后端接口，但 PLONK 协议适配尚未实现，因此目前不要向 PLONK 的 `setup` 或 `prove` 传入 `--backend cuda` / `--backend hip`。这不影响 Groth16 使用已有的 CUDA/HIP 后端。
+CPU 后端可完整运行。CUDA 构建同时包含 CPU 与 CUDA 后端：Setup 通过统一的 CUDA 后端入口复用 CPU 实现，Prove 在 GPU 上完成 NTT、MSM、逐点域运算、逐点求逆、前缀乘积、多项式求值和综合除法；Transcript 和挑战生成保留在 CPU。HIP 目录目前只保留统一接口，PLONK 暂不支持 `--backend hip`。
+
+### 使用 CPU 后端
 
 以下命令在仓库根目录构建 PLONK，并完整运行一个规模为 79 的矩阵乘法电路：
 
@@ -137,6 +139,22 @@ PLONK_BIN=build/plonk/bin
 "$PLONK_BIN/plonk-prove" --backend cpu matmul_79.bin
 "$PLONK_BIN/plonk-verify" matmul_79.bin
 ```
+
+### 使用 NVIDIA CUDA 后端
+
+CUDA 配置仍生成同名的四个程序，不会生成后端专属可执行文件。`CUDA_ARCH` 是目标 GPU 的计算能力；RTX 5060 使用 `120`。完整命令如下：
+
+```bash
+make plonk-cuda CUDA_ARCH=120
+PLONK_BIN=build/plonk/bin
+
+"$PLONK_BIN/plonk-gen" matmul 10
+"$PLONK_BIN/plonk-setup" --backend cuda matmul_10.bin
+"$PLONK_BIN/plonk-prove" --backend cuda matmul_10.bin
+"$PLONK_BIN/plonk-verify" matmul_10.bin
+```
+
+这里的 `plonk-setup --backend cuda` 在内部调用 CPU Setup；Setup 不使用 GPU 生成 SRS 或固定多项式。选择 CUDA 后端的意义是保持四阶段接口一致，并让随后读取同一 PK 的 Prove 使用 GPU。
 
 也可以生成 Fibonacci 电路，并显式复用已有的 SRS：
 
@@ -155,6 +173,8 @@ PLONK 使用独立的 `build/plonk` 构建树，产物默认位于 `build/plonk/
 ```bash
 make plonk-cpu
 make plonk-test-cpu
+make plonk-cuda CUDA_ARCH=120
+make plonk-test-cuda CUDA_ARCH=120 PLONK_CUDA_MATRIX_SIZE=10
 make plonk-test-arithmetization
 make plonk-test-cpu-setup
 make plonk-test-cpu-prove-verify
@@ -167,7 +187,7 @@ make plonk-test-cpu-prove-verify
 - `app/` 只负责解析命令和组织文件流程，入口实现直接放在该目录，不设置空的 `include/`、`src/` 或 `backends/` 子层级。
 - `protocols/*/common` 负责公共协议类型、Transcript/I/O 规则、验证以及与后端无关的语义。
 - `protocols/*/backends` 负责协议专属的加速数据流和融合内核。
-- `operators/*` 负责与协议无关的域运算、曲线运算、NTT、MSM、内存管理，以及未来可加入的扫描和批量求逆等基础算子。
+- `operators/*` 负责与协议无关的域运算、曲线运算、NTT、MSM、内存管理、扫描、逐点求逆、多项式求值和综合除法等基础算子。
 - 公共协议头文件不得暴露 `cudaStream_t`、`hipStream_t` 或设备指针。
 - 一个协议不得包含另一个协议的后端头文件。
 - `common/`、`operators/` 和 `protocols/` 下不保留空的占位目录；新增目录必须同时承载实际源码或头文件。
@@ -187,3 +207,4 @@ make plonk-test-cpu-prove-verify
 - `PLONK_BUILD_DIR`：PLONK CMake 构建目录，默认为 `build/plonk`；
 - `PLONK_BIN_DIR`：PLONK 可执行文件目录，默认为 `build/plonk/bin`；
 - `PLONK_DATA_DIR`：PLONK 产物目录，默认为 `build/plonk/data`。
+- `PLONK_CUDA_MATRIX_SIZE`：`plonk-test-cuda` 使用的矩阵规模，默认为 `10`。

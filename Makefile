@@ -17,11 +17,12 @@ CUDA_HOME ?= /usr/local/cuda
 GROTH16_CPU_MATRIX_SIZE ?= 4
 GROTH16_CUDA_MATRIX_SIZE ?= 12
 GROTH16_HIP_MATRIX_SIZE ?= 12
+PLONK_CUDA_MATRIX_SIZE ?= 10
 LIGHTZK_DEPS_DIR ?= $(CURDIR)/third_party/lightzk/depends
 PROFILE_FLAG = $(if $(filter 1 true yes on,$(PROFILE)),--profile,)
 HIP_ARCH_FLAG = $(if $(strip $(HIP_ARCH)),-DCMAKE_HIP_ARCHITECTURES=$(HIP_ARCH),)
 
-.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-clean plonk-cpu plonk-scaffold plonk-test-cpu plonk-test-arithmetization plonk-test-cpu-setup plonk-test-cpu-prove-verify plonk-clean stark stark-matmul clean
+.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-clean plonk-cpu plonk-cuda plonk-scaffold plonk-test-cpu plonk-test-cuda plonk-test-arithmetization plonk-test-cpu-setup plonk-test-cpu-prove-verify plonk-clean stark stark-matmul clean
 
 help:
 	@echo "NKR-ZKP targets:"
@@ -34,7 +35,9 @@ help:
 	@echo "  groth16-test-hip   run a HIP setup/prove/verify flow"
 	@echo "  groth16-clean  remove all Groth16 CMake build trees"
 	@echo "  plonk-cpu      configure and build PLONK with the CPU backend"
+	@echo "  plonk-cuda     configure and build PLONK with CPU and NVIDIA CUDA backends"
 	@echo "  plonk-test-cpu run PLONK gen/setup/prove/verify with a small matmul circuit"
+	@echo "  plonk-test-cuda run CUDA operator tests and a PLONK CUDA end-to-end flow"
 	@echo "  plonk-test-arithmetization  build and test the PLONK circuit manager"
 	@echo "  plonk-test-cpu-setup  build and test PLONK CPU Setup"
 	@echo "  plonk-test-cpu-prove-verify  build and test PLONK CPU Prove/Verify"
@@ -117,6 +120,18 @@ plonk-cpu:
 	cmake --build $(PLONK_BUILD_DIR) --parallel $(JOBS) \
 		--target plonk-gen plonk-setup plonk-prove plonk-verify
 
+plonk-cuda:
+	PATH="$(CUDA_HOME)/bin:$$PATH" CUDACXX="$(CUDA_HOME)/bin/nvcc" cmake -S . -B $(PLONK_BUILD_DIR) \
+		-DNKR_ZKP_PROTOCOL=PLONK \
+		-DNKR_ZKP_ACCELERATOR=CUDA \
+		-DNKR_ZKP_PLONK_BIN_DIR="$(abspath $(PLONK_BIN_DIR))" \
+		-DNKR_ZKP_PLONK_DATA_DIR="$(abspath $(PLONK_DATA_DIR))" \
+		-DNKR_ZKP_LIGHTZK_DEPS_DIR="$(LIGHTZK_DEPS_DIR)" \
+		-DCMAKE_CUDA_ARCHITECTURES=$(CUDA_ARCH)
+	PATH="$(CUDA_HOME)/bin:$$PATH" \
+		cmake --build $(PLONK_BUILD_DIR) --parallel $(JOBS) \
+			--target plonk-gen plonk-setup plonk-prove plonk-verify
+
 plonk-scaffold: plonk-cpu
 
 plonk-test-cpu: plonk-cpu
@@ -124,6 +139,15 @@ plonk-test-cpu: plonk-cpu
 	$(PLONK_BIN_DIR)/plonk-setup --backend cpu matmul_2.bin
 	$(PLONK_BIN_DIR)/plonk-prove --backend cpu matmul_2.bin
 	$(PLONK_BIN_DIR)/plonk-verify matmul_2.bin
+
+plonk-test-cuda: plonk-cuda
+	cmake --build $(PLONK_BUILD_DIR) --parallel $(JOBS) \
+		--target plonk-cuda-operators-test
+	$(PLONK_BUILD_DIR)/protocols/plonk/backends/cuda/plonk-cuda-operators-test
+	$(PLONK_BIN_DIR)/plonk-gen $(PROFILE_FLAG) matmul $(PLONK_CUDA_MATRIX_SIZE)
+	$(PLONK_BIN_DIR)/plonk-setup $(PROFILE_FLAG) --backend cuda matmul_$(PLONK_CUDA_MATRIX_SIZE).bin
+	$(PLONK_BIN_DIR)/plonk-prove $(PROFILE_FLAG) --backend cuda matmul_$(PLONK_CUDA_MATRIX_SIZE).bin
+	$(PLONK_BIN_DIR)/plonk-verify $(PROFILE_FLAG) matmul_$(PLONK_CUDA_MATRIX_SIZE).bin
 
 plonk-test-arithmetization: plonk-cpu
 	cmake --build $(PLONK_BUILD_DIR) --parallel $(JOBS) \

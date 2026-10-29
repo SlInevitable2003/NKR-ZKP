@@ -11,7 +11,7 @@
 
 原有的 Rust CPU/CUDA 代码已删除。它们基于不同的软件栈，实现的是另一种带查找功能的四线协议，因此不会作为当前框架的实现基础。
 
-当前已实现三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、基于共享 `BinaryArchive` 的产物序列化，以及完整的 `plonk-gen/setup/prove/verify` 命令行流程。低层协议文档见 `docs/plonk_protocol_low_level.pdf`。
+当前已实现三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、CUDA Prove、基于共享 `BinaryArchive` 的产物序列化，以及完整的 `plonk-gen/setup/prove/verify` 命令行流程。低层协议文档见 `docs/plonk_protocol_low_level.pdf`。
 
 ## Plonkish 算术化 Manager
 
@@ -66,11 +66,19 @@ make plonk-test-cpu-prove-verify
 
 Setup 的调用层并行度由 `OMP_NUM_THREADS` 控制，但不启用 libff/libfqfft 的全局 `MULTICORE` 宏。CPU Prove 作为比较基准保持单线程。使用 `--profile` 时，CPU Setup 会分别报告 SRS 标量幂、固定基窗口表、FixMSM、域准备、置换构造，以及每个固定多项式的 iNTT、MSM 和 coset NTT；CPU Prove 会报告五轮总耗时，并进一步细分 wire/quotient/opening MSM、batch inversion、grand product、coset NTT、商多项式逐点评估、inverse coset NTT、线性化和 synthetic division。
 
+## CUDA Prove
+
+`backends/cuda` 与 Groth16 CUDA 后端采用相同的组织方式：协议后端只编排五轮数据流，BN254 域/曲线、NTT、MSM、scan、逐点求逆、多项式求值和综合除法位于顶层 `operators/cuda`。固定多项式的系数、H 点值和商域点值在 Prove 开始时一次上传并在整个证明期间驻留显存，轮次之间不往返传输多项式。Transcript 与挑战生成留在 CPU，MSM 超出 N 项的至多三个尾系数也按既定算子边界在 CPU 合并。
+
+逐点求逆直接复用 `mont_t.cuh` 中由相邻线程协作的 `reciprocal()`；置换累积乘积和综合除法复用同一个支持非交换结合操作的递归 scan。小规模和跨 block 路径由 `plonk-cuda-operators-test` 与 CPU 结果对照，覆盖 NTT/coset NTT、MSM、求逆、乘积 scan、多项式求值和综合除法。
+
+CUDA Setup 当前有意委托 CPU Setup，不在 GPU 上生成 SRS。CUDA Prove 的 profile 标签与 CPU 保持相同的五轮和子阶段层次，前缀为 `plonk.cuda.prove`。
+
 ## 产物序列化与命令行
 
 `common/src/io.cpp` 提供 `circuit`、`witness`、`srs`、`proving-key`、`verification-key`、`proof` 的读写，复用共享的 `BinaryArchive`（见 `common/include/binary_archive.hpp`）。文件以魔数 `LKZ1` 和版本号开头，向量带字节长度前缀；元素按原始内存布局读写，因此要求读写程序使用兼容的 ABI、依赖版本与构建配置。该格式用于本项目程序之间传递产物，不承诺规范化的跨实现编码。
 
-与 Groth16 一样，PLONK 始终使用同名的四个统一程序，不为不同后端分别生成可执行文件。当前 CPU 流程已完整实现；CUDA/HIP 协议适配仍是框架，因此 `plonk-setup` 和 `plonk-prove` 目前只应使用 `--backend cpu`。`plonk-gen` 和 `plonk-verify` 不接收 `--backend`。
+与 Groth16 一样，PLONK 始终使用同名的四个统一程序，不为不同后端分别生成可执行文件。CPU 构建支持 `--backend cpu`；CUDA 构建同时支持 `--backend cpu` 和 `--backend cuda`。HIP 协议适配仍是框架，暂不支持 `--backend hip`。`plonk-gen` 和 `plonk-verify` 不接收 `--backend`。
 
 `plonk-gen` 目前支持 `matmul` 与 `fibonacci` 两种用例；`plonk-setup` 在未提供 `--srs` 时现场生成并写出 SRS。下面给出两种电路的完整 CPU 命令，其中第二次 Setup 复用第一次生成的 SRS：
 
@@ -91,4 +99,22 @@ PLONK_BIN=build/plonk/bin
 "$PLONK_BIN/plonk-verify" fibonacci_10.bin
 ```
 
-上述命令使用独立的 `build/plonk` 构建树，默认产物目录为 `build/plonk/data`。与 Groth16 相同，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖该目录；使用默认值时无需传入。自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。快速回归仍可执行 `make plonk-test-cpu`。
+CUDA 的完整构建与运行命令如下；RTX 5060 的计算能力为 `120`：
+
+```bash
+make plonk-cuda CUDA_ARCH=120
+
+PLONK_BIN=build/plonk/bin
+"$PLONK_BIN/plonk-gen" matmul 10
+"$PLONK_BIN/plonk-setup" --backend cuda matmul_10.bin
+"$PLONK_BIN/plonk-prove" --backend cuda matmul_10.bin
+"$PLONK_BIN/plonk-verify" matmul_10.bin
+```
+
+包含共享算子对照测试和端到端证明验证的快速回归命令为：
+
+```bash
+make plonk-test-cuda CUDA_ARCH=120 PLONK_CUDA_MATRIX_SIZE=10
+```
+
+上述命令使用独立的 `build/plonk` 构建树，默认产物目录为 `build/plonk/data`。与 Groth16 相同，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖该目录；使用默认值时无需传入。自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。CPU 快速回归可执行 `make plonk-test-cpu`。
