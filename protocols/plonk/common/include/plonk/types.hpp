@@ -78,10 +78,21 @@ struct CircuitCommitments {
     G1 sigma_3;
 };
 
+struct NttPrecomputation {
+    std::vector<Scalar> domain_coset_powers;
+    std::vector<Scalar> domain_inverse_omegas;
+    std::vector<Scalar> domain_inverse_coset_powers;
+    std::vector<Scalar> quotient_omegas;
+    std::vector<Scalar> quotient_coset_powers;
+    std::vector<Scalar> quotient_inverse_omegas;
+    std::vector<Scalar> quotient_inverse_coset_powers;
+};
+
 struct ProvingKey {
     Circuit circuit;
     DomainParameters domain;
     std::vector<Scalar> omegas;
+    NttPrecomputation ntt;
     FixedPolynomials fixed;
     CircuitCommitments commitments;
     UniversalSrs srs;

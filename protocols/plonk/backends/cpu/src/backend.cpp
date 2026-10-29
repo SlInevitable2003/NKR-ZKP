@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include <omp.h>
+
 #include "libff/algebra/scalar_multiplication/multiexp.hpp"
 #include "libff/algebra/fields/field_utils.hpp"
 #include "libfqfft/evaluation_domain/get_evaluation_domain.hpp"
@@ -39,6 +41,48 @@ std::pair<Scalar, Scalar> choose_wire_cosets(const std::size_t n)
         }
     }
     throw std::runtime_error("PLONK Setup: failed to choose disjoint wire cosets");
+}
+
+std::vector<Scalar> make_power_table(const Scalar &base, const std::size_t size)
+{
+    std::vector<Scalar> result(size);
+    if (size == 0) return result;
+
+    #pragma omp parallel
+    {
+        const std::size_t threads = static_cast<std::size_t>(omp_get_num_threads());
+        const std::size_t thread = static_cast<std::size_t>(omp_get_thread_num());
+        const std::size_t begin = size * thread / threads;
+        const std::size_t end = size * (thread + 1) / threads;
+        Scalar power = base ^ begin;
+        for (std::size_t i = begin; i < end; ++i) {
+            result[i] = power;
+            power *= base;
+        }
+    }
+    return result;
+}
+
+NttPrecomputation make_ntt_precomputation(
+    const std::size_t n,
+    const Scalar &omega,
+    const std::size_t quotient_size,
+    const Scalar &quotient_omega,
+    const Scalar &coset_shift)
+{
+    NttPrecomputation result;
+    result.domain_coset_powers = make_power_table(coset_shift, n + 1);
+    result.domain_inverse_omegas = make_power_table(omega.inverse(), n);
+    result.domain_inverse_coset_powers =
+        make_power_table(coset_shift.inverse(), n);
+    result.quotient_omegas = make_power_table(quotient_omega, quotient_size);
+    result.quotient_coset_powers =
+        make_power_table(coset_shift, quotient_size + 1);
+    result.quotient_inverse_omegas =
+        make_power_table(quotient_omega.inverse(), quotient_size);
+    result.quotient_inverse_coset_powers =
+        make_power_table(coset_shift.inverse(), quotient_size);
+    return result;
 }
 
 G1 commit_polynomial(const std::vector<Scalar> &coefficients, const UniversalSrs &srs)
@@ -215,6 +259,12 @@ public:
         result.srs = srs;
         result.domain = { n, quotient_size, omega, k_1, k_2, coset_shift };
         result.omegas = std::move(omegas);
+        {
+            ProfileScope stage("plonk.cpu.setup.ntt_precomputation");
+            result.ntt = make_ntt_precomputation(
+                n, omega, quotient_size,
+                quotient_domain->get_domain_element(1), coset_shift);
+        }
 
         result.fixed.q_l = prepare_polynomial(circuit.q_l, domain, quotient_domain, coset_shift, srs, result.commitments.q_l, "plonk.cpu.setup.q_l");
         result.fixed.q_r = prepare_polynomial(circuit.q_r, domain, quotient_domain, coset_shift, srs, result.commitments.q_r, "plonk.cpu.setup.q_r");

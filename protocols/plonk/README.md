@@ -46,6 +46,7 @@ make plonk-test-arithmetization
 - 使用单项式形式 SRS，以调用层分块并行的 BDLO12 MSM 完成八次 KZG 承诺；
 - 在 `M = 4N` 的陪集域上缓存八个固定多项式的点值；
 - 在 Proving Key 中缓存 Setup 生成的 `1, omega, ..., omega^(N-1)`，供 Prove 直接使用；
+- 生成 N 点域和 M 点商域的 NTT/iNTT/coset 幂表并写入 Proving Key，避免 Prove 重复构造；
 - 分别生成包含固定多项式数据的 Proving Key 和精简的 Verification Key。
 
 CPU Setup 单元测试使用已知 `tau` 临时构造 SRS，仅用于验证承诺结果，不能用于生产环境：
@@ -68,11 +69,11 @@ Setup 的调用层并行度由 `OMP_NUM_THREADS` 控制，但不启用 libff/lib
 
 ## CUDA Prove
 
-`backends/cuda` 与 Groth16 CUDA 后端采用相同的组织方式：协议后端只编排五轮数据流，BN254 域/曲线、NTT、MSM、scan、逐点求逆、多项式求值和综合除法位于顶层 `operators/cuda`。固定多项式的系数、H 点值和商域点值在 Prove 开始时一次上传并在整个证明期间驻留显存，轮次之间不往返传输多项式。Transcript 与挑战生成留在 CPU，MSM 超出 N 项的至多三个尾系数也按既定算子边界在 CPU 合并。
+`backends/cuda` 与 Groth16 CUDA 后端采用相同的组织方式：协议后端只编排五轮数据流，BN254 域/曲线、NTT、MSM、scan、逐点求逆、多项式求值和综合除法位于顶层 `operators/cuda`。`plonk-prove` 先执行不计入在线证明时间的 prepare 阶段，把固定多项式的系数、H 点值、商域点值、SRS bases 以及 Setup 生成的 NTT 幂表一次上传并在整个证明期间驻留显存；正式 Prove 只上传 witness 和公开输入，轮次之间不往返传输多项式。Transcript 与挑战生成留在 CPU，MSM 超出 N 项的至多三个尾系数也按既定算子边界在 CPU 合并。
 
 逐点求逆直接复用 `mont_t.cuh` 中由相邻线程协作的 `reciprocal()`；置换累积乘积和综合除法复用同一个支持非交换结合操作的递归 scan。小规模和跨 block 路径由 `plonk-cuda-operators-test` 与 CPU 结果对照，覆盖 NTT/coset NTT、MSM、求逆、乘积 scan、多项式求值和综合除法。
 
-CUDA Setup 当前有意委托 CPU Setup，不在 GPU 上生成 SRS。CUDA Prove 的 profile 标签与 CPU 保持相同的五轮和子阶段层次，前缀为 `plonk.cuda.prove`。
+CUDA Setup 当前有意委托 CPU Setup，不在 GPU 上生成 SRS；NTT 幂表同样由 CPU Setup 并行生成并随 PK 保存。CUDA prepare 使用 `plonk.cuda.prepare` 前缀单独计时；正式 Prove 的 profile 标签与 CPU 保持相同的五轮和子阶段层次，前缀为 `plonk.cuda.prove`。`plonk.prove.total` 只覆盖正式证明，包含文件读写、校验、prepare 和释放资源的端到端时间由 `plonk.prove.program_total` 报告。
 
 ## 产物序列化与命令行
 

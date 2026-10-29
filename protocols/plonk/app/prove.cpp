@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     Curve::init_public_params();
 
     try {
-        ProfileScope total("plonk.prove.total");
+        ProfileScope program_total("plonk.prove.program_total");
         const auto paths = artifact_paths(directory, filename);
         Witness witness;
         ProvingKey proving_key;
@@ -61,10 +61,17 @@ int main(int argc, char **argv)
         }
         auto backend = make_backend(backend_name);
         std::cout << "PLONK prove backend: " << backend->name() << '\n';
+        {
+            ProfileScope stage("plonk.prove.prepare_backend");
+            backend->prepare(proving_key);
+        }
         Proof proof;
         {
-            ProfileScope stage("plonk.prove.backend");
-            backend->prove(proving_key, witness, proof);
+            ProfileScope total("plonk.prove.total");
+            {
+                ProfileScope stage("plonk.prove.backend");
+                backend->prove(proving_key, witness, proof);
+            }
         }
         {
             ProfileScope stage("plonk.prove.write_proof");

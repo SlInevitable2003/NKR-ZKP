@@ -90,12 +90,14 @@ public:
         : n(key.domain.domain_size),
           quotient_size(key.domain.quotient_domain_size),
           commitment_buckets(n, choose_window_bits(n)),
-          domain_ntt(n, key.domain.omega, key.domain.coset_shift),
-          quotient_ntt(
-              quotient_size,
-              reinterpret_cast<const Scalar *>(forward_roots_of_unity)
-                  [libff::log2(quotient_size)],
-              key.domain.coset_shift),
+          domain_ntt(n, key.omegas.data(),
+                     key.ntt.domain_coset_powers.data(),
+                     key.ntt.domain_inverse_omegas.data(),
+                     key.ntt.domain_inverse_coset_powers.data()),
+          quotient_ntt(quotient_size, key.ntt.quotient_omegas.data(),
+                       key.ntt.quotient_coset_powers.data(),
+                       key.ntt.quotient_inverse_omegas.data(),
+                       key.ntt.quotient_inverse_coset_powers.data()),
           commitment_msm(n, choose_window_bits(n)),
           product_scan(n),
           polynomial_evaluation(n + 3),
@@ -134,9 +136,7 @@ public:
     }
 };
 
-void upload_inputs(CudaProveLayout &layout,
-                   const ProvingKey &key,
-                   const Witness &witness)
+void upload_key(CudaProveLayout &layout, const ProvingKey &key)
 {
     std::vector<G1> commitment_bases(
         key.srs.g1_powers.begin(), key.srs.g1_powers.begin() + layout.n);
@@ -157,7 +157,10 @@ void upload_inputs(CudaProveLayout &layout,
     }
     CUDA_CHECK(cudaMemcpy(layout.omegas, key.omegas.data(),
                           layout.n * sizeof(fr_t), cudaMemcpyHostToDevice));
+}
 
+void upload_witness(CudaProveLayout &layout, const Witness &witness)
+{
     const std::array<const std::vector<Scalar> *, 3> wires = {
         &witness.a, &witness.b, &witness.c};
     for (std::size_t i = 0; i < 3; ++i) {
@@ -237,6 +240,8 @@ __global__ void permutation_products_kernel(
 }
 
 class CudaBackend final : public Backend {
+    std::unique_ptr<CudaProveLayout> prepared_layout;
+
 public:
     const char *name() const override { return "cuda"; }
 
@@ -249,21 +254,40 @@ public:
         make_cpu_backend()->setup(circuit, srs, proving_key, verification_key);
     }
 
+    void prepare(const ProvingKey &key) override
+    {
+        ProfileScope total("plonk.cuda.prepare.total");
+        {
+            ProfileScope stage("plonk.cuda.prepare.initialize_layout");
+            prepared_layout = std::make_unique<CudaProveLayout>(key);
+            profile_synchronize();
+        }
+        {
+            ProfileScope stage("plonk.cuda.prepare.upload_key");
+            upload_key(*prepared_layout, key);
+            profile_synchronize();
+        }
+    }
+
     void prove(const ProvingKey &key,
                const Witness &witness,
                Proof &proof) override
     {
+        if (!prepared_layout) prepare(key);
         ProfileScope total("plonk.cuda.prove.total");
         const std::size_t n = key.domain.domain_size;
         const std::size_t quotient_size = key.domain.quotient_domain_size;
         const std::size_t part_size = n + 2;
-        CudaProveLayout layout(key);
-        Transcript transcript = initialize_transcript(
-            verification_key_from(key), witness.public_input);
+        CudaProveLayout &layout = *prepared_layout;
+        Transcript transcript = [&] {
+            ProfileScope stage("plonk.cuda.prove.transcript_init");
+            return initialize_transcript(
+                verification_key_from(key), witness.public_input);
+        }();
 
         {
-            ProfileScope stage("plonk.cuda.prove.upload_inputs");
-            upload_inputs(layout, key, witness);
+            ProfileScope stage("plonk.cuda.prove.upload_witness");
+            upload_witness(layout, witness);
             profile_synchronize();
         }
 
@@ -424,22 +448,16 @@ public:
             {
                 ProfileScope stage(
                     "plonk.cuda.prove.round3.quotient_domain_evaluations");
-                const Scalar quotient_omega =
-                    reinterpret_cast<const Scalar *>(forward_roots_of_unity)
-                        [libff::log2(quotient_size)];
-                CUDA_CHECK(cudaMemcpy(layout.coset_points + 1, &quotient_omega,
-                                      sizeof(fr_t), cudaMemcpyHostToDevice));
-                power_computing<<<1, 1>>>(layout.coset_points, quotient_size);
                 constexpr std::size_t block_size = 256;
                 const unsigned log_n = libff::log2(n);
                 kernel<<<ceil_div(quotient_size, block_size), block_size>>>(
-                    [] __device__(fr_t *points, fr_t *z_h,
+                    [] __device__(const fr_t *omegas, fr_t *points, fr_t *z_h,
                                   fr_t *denominators, fr_t shift,
                                   unsigned log_domain_size,
                                   std::size_t count) {
                         const std::size_t i = blockIdx.x * blockDim.x + threadIdx.x;
                         if (i >= count) return;
-                        const fr_t point = points[i] * shift;
+                        const fr_t point = omegas[i] * shift;
                         points[i] = point;
                         fr_t point_to_n = point;
                         for (unsigned round = 0; round < log_domain_size; ++round)
@@ -448,7 +466,8 @@ public:
                         z_h[i] = vanishing;
                         denominators[i] = vanishing;
                         denominators[count + i] = point - fr_t::one();
-                    }, layout.coset_points, layout.z_h_evaluations,
+                    }, layout.quotient_ntt.omega_powers(), layout.coset_points,
+                    layout.z_h_evaluations,
                     layout.quotient_denominators,
                     device_value<fr_t>(key.domain.coset_shift), log_n,
                     quotient_size);

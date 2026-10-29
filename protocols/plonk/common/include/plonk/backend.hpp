@@ -19,6 +19,8 @@ public:
         ProvingKey &proving_key,
         VerificationKey &verification_key) = 0;
 
+    virtual void prepare(const ProvingKey &) {}
+
     virtual void prove(
         const ProvingKey &proving_key,
         const Witness &witness,

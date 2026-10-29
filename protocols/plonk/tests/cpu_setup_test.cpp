@@ -187,6 +187,16 @@ int main()
     assert(proving_key.omegas[0] == Scalar::one());
     for (std::size_t row = 1; row < n; ++row)
         assert(proving_key.omegas[row] == proving_key.omegas[row - 1] * domain.omega);
+    assert(proving_key.ntt.domain_coset_powers.size() == n + 1);
+    assert(proving_key.ntt.domain_inverse_omegas.size() == n);
+    assert(proving_key.ntt.domain_inverse_coset_powers.size() == n);
+    assert(proving_key.ntt.quotient_omegas.size() == domain.quotient_domain_size);
+    assert(proving_key.ntt.quotient_coset_powers.size() ==
+           domain.quotient_domain_size + 1);
+    assert(proving_key.ntt.quotient_inverse_omegas.size() ==
+           domain.quotient_domain_size);
+    assert(proving_key.ntt.quotient_inverse_coset_powers.size() ==
+           domain.quotient_domain_size);
 
     assert(proving_key.fixed.q_l.evaluations == arithmetization.circuit.q_l);
     assert(proving_key.fixed.q_r.evaluations == arithmetization.circuit.q_r);
@@ -260,6 +270,20 @@ int main()
     check_circuit_equal(loaded_proving_key.circuit, proving_key.circuit);
     check_domain_equal(loaded_proving_key.domain, proving_key.domain);
     assert(loaded_proving_key.omegas == proving_key.omegas);
+    assert(loaded_proving_key.ntt.domain_coset_powers ==
+           proving_key.ntt.domain_coset_powers);
+    assert(loaded_proving_key.ntt.domain_inverse_omegas ==
+           proving_key.ntt.domain_inverse_omegas);
+    assert(loaded_proving_key.ntt.domain_inverse_coset_powers ==
+           proving_key.ntt.domain_inverse_coset_powers);
+    assert(loaded_proving_key.ntt.quotient_omegas ==
+           proving_key.ntt.quotient_omegas);
+    assert(loaded_proving_key.ntt.quotient_coset_powers ==
+           proving_key.ntt.quotient_coset_powers);
+    assert(loaded_proving_key.ntt.quotient_inverse_omegas ==
+           proving_key.ntt.quotient_inverse_omegas);
+    assert(loaded_proving_key.ntt.quotient_inverse_coset_powers ==
+           proving_key.ntt.quotient_inverse_coset_powers);
     check_commitments_equal(loaded_proving_key.commitments, proving_key.commitments);
     assert(loaded_proving_key.fixed.q_l.coefficients ==
            proving_key.fixed.q_l.coefficients);

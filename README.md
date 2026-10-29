@@ -124,7 +124,7 @@ build/plonk/bin/plonk-verify
 
 `gen` 负责产生电路与见证，`setup` 读取电路并产生 SRS、PK 和 VK，`prove` 读取 PK 与见证产生证明，`verify` 读取 VK、公开输入和证明完成验证。只有 `setup` 与 `prove` 接收 `--backend`；`gen` 和 `verify` 是后端无关的公共程序。
 
-CPU 后端可完整运行。CUDA 构建同时包含 CPU 与 CUDA 后端：Setup 通过统一的 CUDA 后端入口复用 CPU 实现，Prove 在 GPU 上完成 NTT、MSM、逐点域运算、逐点求逆、前缀乘积、多项式求值和综合除法；Transcript 和挑战生成保留在 CPU。HIP 目录目前只保留统一接口，PLONK 暂不支持 `--backend hip`。
+CPU 后端可完整运行。CUDA 构建同时包含 CPU 与 CUDA 后端：Setup 通过统一的 CUDA 后端入口复用 CPU 实现，并将后续证明需要的 NTT 幂表写入 PK；`plonk-prove` 内部先用独立 prepare 阶段上传所有与输入无关的数据，该阶段不计入正式 Prove，然后在 GPU 上完成 NTT、MSM、逐点域运算、逐点求逆、前缀乘积、多项式求值和综合除法；Transcript 和挑战生成保留在 CPU。HIP 目录目前只保留统一接口，PLONK 暂不支持 `--backend hip`。
 
 ### 使用 CPU 后端
 
@@ -154,7 +154,7 @@ PLONK_BIN=build/plonk/bin
 "$PLONK_BIN/plonk-verify" matmul_10.bin
 ```
 
-这里的 `plonk-setup --backend cuda` 在内部调用 CPU Setup；Setup 不使用 GPU 生成 SRS 或固定多项式。选择 CUDA 后端的意义是保持四阶段接口一致，并让随后读取同一 PK 的 Prove 使用 GPU。
+这里的 `plonk-setup --backend cuda` 在内部调用 CPU Setup；Setup 不使用 GPU 生成 SRS 或固定多项式，但会在 CPU 上生成 NTT 幂表并写入 PK。选择 CUDA 后端的意义是保持四阶段接口一致，并让随后读取同一 PK 的 Prove 使用 GPU。PK 格式包含这些预计算数据，更新程序后需要重新运行 Setup，不能复用旧 PK。
 
 也可以生成 Fibonacci 电路，并显式复用已有的 SRS：
 

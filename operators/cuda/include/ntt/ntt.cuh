@@ -29,13 +29,8 @@ class NTTContext {
     
     TypedGpuArena arena;
 
-public:
-    NTTContext(size_t scale_, HostFT omega, HostFT coset) : scale(scale_) {
-        assert((scale & (scale - 1)) == 0 && "Scale must be a power of 2");
-        assert(scale >= 2 && "Scale must be at least 2");
-
-        HostFT scale_in_field(static_cast<long>(scale));
-        
+    void allocate()
+    {
         arena.register_alloc(scale_inverse, 1);
         arena.register_alloc(omega_power_table, scale);
         arena.register_alloc(coset_power_table, scale + 1);
@@ -43,17 +38,36 @@ public:
         arena.register_alloc(ioset_power_table, scale);
         arena.register_alloc(buffer, scale);
         arena.commit("NTTContext");
+    }
+
+    void initialize_scale_inverse()
+    {
+        HostFT scale_in_field(static_cast<long>(scale));
+        scale_in_field.invert();
+        CUDA_CHECK(cudaMemcpy(scale_inverse, &scale_in_field, sizeof(FieldT),
+                              cudaMemcpyHostToDevice));
+    }
+
+public:
+    NTTContext(size_t scale_, HostFT omega, HostFT coset) : scale(scale_) {
+        assert((scale & (scale - 1)) == 0 && "Scale must be a power of 2");
+        assert(scale >= 2 && "Scale must be at least 2");
+
+        allocate();
 
         static_assert(sizeof(HostFT) == sizeof(FieldT), "HostFT and FieldT must have the same size");
-        scale_in_field.invert();
-        cudaMemcpy(scale_inverse, &scale_in_field, sizeof(FieldT), cudaMemcpyHostToDevice);
-        cudaMemcpy(omega_power_table + 1, &omega, sizeof(FieldT), cudaMemcpyHostToDevice);
-        cudaMemcpy(coset_power_table + 1, &coset, sizeof(FieldT), cudaMemcpyHostToDevice);
+        initialize_scale_inverse();
+        CUDA_CHECK(cudaMemcpy(omega_power_table + 1, &omega, sizeof(FieldT),
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(coset_power_table + 1, &coset, sizeof(FieldT),
+                              cudaMemcpyHostToDevice));
         
         omega.invert();
         coset.invert();
-        cudaMemcpy(imega_power_table + 1, &omega, sizeof(FieldT), cudaMemcpyHostToDevice);
-        cudaMemcpy(ioset_power_table + 1, &coset, sizeof(FieldT), cudaMemcpyHostToDevice);
+        CUDA_CHECK(cudaMemcpy(imega_power_table + 1, &omega, sizeof(FieldT),
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(ioset_power_table + 1, &coset, sizeof(FieldT),
+                              cudaMemcpyHostToDevice));
 
         power_computing<<<1, 1>>>(omega_power_table, scale);
         power_computing<<<1, 1>>>(coset_power_table, scale + 1);
@@ -63,6 +77,35 @@ public:
         cudaDeviceSynchronize();
         CUDA_CHECK(cudaGetLastError());
     }
+
+    NTTContext(size_t scale_,
+               const HostFT *omega_powers,
+               const HostFT *coset_powers,
+               const HostFT *inverse_omega_powers,
+               const HostFT *inverse_coset_powers)
+        : scale(scale_)
+    {
+        assert((scale & (scale - 1)) == 0 && "Scale must be a power of 2");
+        assert(scale >= 2 && "Scale must be at least 2");
+        static_assert(sizeof(HostFT) == sizeof(FieldT),
+                      "HostFT and FieldT must have the same size");
+
+        allocate();
+        initialize_scale_inverse();
+        CUDA_CHECK(cudaMemcpy(omega_power_table, omega_powers,
+                              scale * sizeof(FieldT), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(coset_power_table, coset_powers,
+                              (scale + 1) * sizeof(FieldT),
+                              cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(imega_power_table, inverse_omega_powers,
+                              scale * sizeof(FieldT), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaMemcpy(ioset_power_table, inverse_coset_powers,
+                              scale * sizeof(FieldT), cudaMemcpyHostToDevice));
+        CUDA_CHECK(cudaDeviceSynchronize());
+        CUDA_CHECK(cudaGetLastError());
+    }
+
+    const FieldT *omega_powers() const { return omega_power_table; }
 
     void ntt(FieldT *poly, bool inverse = false) 
     {

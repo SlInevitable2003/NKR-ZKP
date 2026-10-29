@@ -234,6 +234,16 @@ bool validate_proving_key(const ProvingKey &key, std::string &error)
         error = "proving key contains an invalid omega cache";
         return false;
     }
+    if (key.ntt.domain_coset_powers.size() != n + 1 ||
+        key.ntt.domain_inverse_omegas.size() != n ||
+        key.ntt.domain_inverse_coset_powers.size() != n ||
+        key.ntt.quotient_omegas.size() != m ||
+        key.ntt.quotient_coset_powers.size() != m + 1 ||
+        key.ntt.quotient_inverse_omegas.size() != m ||
+        key.ntt.quotient_inverse_coset_powers.size() != m) {
+        error = "proving key contains invalid NTT precomputation";
+        return false;
+    }
     if ((key.domain.omega ^ n) != Scalar::one() ||
         (n > 1 && (key.domain.omega ^ (n / 2)) == Scalar::one())) {
         error = "proving key contains an invalid N-th root of unity";

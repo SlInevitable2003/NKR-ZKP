@@ -247,6 +247,13 @@ ProvingKey read_proving_key(const std::filesystem::path &path)
     key.fixed = read_fixed(archive);
     key.commitments = read_commitments(archive);
     key.srs = read_srs_data(archive);
+    archive.read(key.ntt.domain_coset_powers);
+    archive.read(key.ntt.domain_inverse_omegas);
+    archive.read(key.ntt.domain_inverse_coset_powers);
+    archive.read(key.ntt.quotient_omegas);
+    archive.read(key.ntt.quotient_coset_powers);
+    archive.read(key.ntt.quotient_inverse_omegas);
+    archive.read(key.ntt.quotient_inverse_coset_powers);
     return key;
 }
 
@@ -260,6 +267,13 @@ void write_proving_key(const std::filesystem::path &path, const ProvingKey &key)
     write_fixed(archive, key.fixed);
     write_commitments(archive, key.commitments);
     write_srs_data(archive, key.srs);
+    archive.write(key.ntt.domain_coset_powers);
+    archive.write(key.ntt.domain_inverse_omegas);
+    archive.write(key.ntt.domain_inverse_coset_powers);
+    archive.write(key.ntt.quotient_omegas);
+    archive.write(key.ntt.quotient_coset_powers);
+    archive.write(key.ntt.quotient_inverse_omegas);
+    archive.write(key.ntt.quotient_inverse_coset_powers);
 }
 
 VerificationKey read_verification_key(const std::filesystem::path &path)
