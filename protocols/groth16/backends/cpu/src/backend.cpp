@@ -7,6 +7,7 @@
 
 #include "libff/algebra/scalar_multiplication/multiexp.hpp"
 #include "libfqfft/evaluation_domain/get_evaluation_domain.hpp"
+#include "nkr/operators/fixed_base_msm.hpp"
 #include "profile.hpp"
 
 namespace nkr::groth16 {
@@ -24,7 +25,6 @@ Group multiexp(const std::vector<Group> &bases, const std::vector<Scalar> &scala
 std::vector<Scalar> multiply(const CsrMatrix<Scalar> &matrix, const std::vector<Scalar> &vector)
 {
     std::vector<Scalar> result(matrix.num_rows, Scalar::zero());
-    #pragma omp parallel for
     for (std::size_t row = 0; row < matrix.num_rows; ++row) {
         Scalar value = Scalar::zero();
         for (std::size_t j = matrix.row_ptr[row]; j < matrix.row_ptr[row + 1]; ++j)
@@ -70,38 +70,78 @@ public:
         };
         {
             ProfileScope stage("groth16.cpu.setup.evaluate_r1cs");
-            accumulate(circuit.a, at); accumulate(circuit.b, bt); accumulate(circuit.c, ct);
+            #pragma omp parallel sections
+            {
+                #pragma omp section
+                accumulate(circuit.a, at);
+                #pragma omp section
+                accumulate(circuit.b, bt);
+                #pragma omp section
+                accumulate(circuit.c, ct);
+            }
         }
 
-        pk.a_query.resize(columns); pk.b_g1_query.resize(columns); pk.b_g2_query.resize(columns);
-        pk.l_query.resize(columns, G1::zero()); pk.h_query.resize(rows, G1::zero());
-        vk.ic.resize(circuit.public_inputs + 1);
         const G1 g1 = G1::one(); const G2 g2 = G2::one();
+
+        std::vector<Scalar> l_scalars(columns, Scalar::zero());
+        std::vector<Scalar> ic_scalars(circuit.public_inputs + 1);
+        std::vector<Scalar> h_scalars(rows, Scalar::zero());
         {
-            ProfileScope stage("groth16.cpu.setup.generate_abc_l_queries");
+            ProfileScope stage("groth16.cpu.setup.prepare_query_scalars");
             #pragma omp parallel for
             for (std::size_t i = 0; i < columns; ++i) {
-                pk.a_query[i] = at[i] * g1;
-                pk.b_g1_query[i] = bt[i] * g1;
-                pk.b_g2_query[i] = bt[i] * g2;
                 if (i > circuit.public_inputs)
-                    pk.l_query[i] = ((beta * at[i] + alpha * bt[i] + ct[i]) * delta_inverse) * g1;
+                    l_scalars[i] =
+                        (beta * at[i] + alpha * bt[i] + ct[i]) * delta_inverse;
             }
+            #pragma omp parallel for
+            for (std::size_t i = 0; i <= circuit.public_inputs; ++i)
+                ic_scalars[i] =
+                    (beta * at[i] + alpha * bt[i] + ct[i]) * gamma_inverse;
+
+            Scalar power = Scalar::one();
+            for (std::size_t i = 0; i + 1 < rows; ++i) {
+                h_scalars[i] = power * zt * delta_inverse;
+                power *= t;
+            }
+        }
+
+        using G1FixedBaseMsm = operators::FixedBaseMsm<G1, Scalar>;
+        using G2FixedBaseMsm = operators::FixedBaseMsm<G2, Scalar>;
+        std::unique_ptr<G1FixedBaseMsm> g1_fixed_base_msm;
+        std::unique_ptr<G2FixedBaseMsm> g2_fixed_base_msm;
+        {
+            ProfileScope stage("groth16.cpu.setup.fixed_base_tables");
+            const std::size_t g1_scalar_count =
+                3 * columns + rows + circuit.public_inputs + 1;
+            g1_fixed_base_msm =
+                std::make_unique<G1FixedBaseMsm>(g1, g1_scalar_count);
+            g2_fixed_base_msm =
+                std::make_unique<G2FixedBaseMsm>(g2, columns);
+        }
+        {
+            ProfileScope stage("groth16.cpu.setup.generate_a_query");
+            pk.a_query = (*g1_fixed_base_msm)(at);
+        }
+        {
+            ProfileScope stage("groth16.cpu.setup.generate_b_g1_query");
+            pk.b_g1_query = (*g1_fixed_base_msm)(bt);
+        }
+        {
+            ProfileScope stage("groth16.cpu.setup.generate_b_g2_query");
+            pk.b_g2_query = (*g2_fixed_base_msm)(bt);
+        }
+        {
+            ProfileScope stage("groth16.cpu.setup.generate_l_query");
+            pk.l_query = (*g1_fixed_base_msm)(l_scalars);
+        }
+        {
+            ProfileScope stage("groth16.cpu.setup.generate_h_query");
+            pk.h_query = (*g1_fixed_base_msm)(h_scalars);
         }
         {
             ProfileScope stage("groth16.cpu.setup.generate_ic_query");
-            #pragma omp parallel for
-            for (std::size_t i = 0; i <= circuit.public_inputs; ++i)
-                vk.ic[i] = ((beta * at[i] + alpha * bt[i] + ct[i]) * gamma_inverse) * g1;
-        }
-
-        {
-            ProfileScope stage("groth16.cpu.setup.generate_h_query");
-            Scalar power = Scalar::one();
-            for (std::size_t i = 0; i + 1 < rows; ++i) {
-                pk.h_query[i] = (power * zt * delta_inverse) * g1;
-                power *= t;
-            }
+            vk.ic = (*g1_fixed_base_msm)(ic_scalars);
         }
 
         {
@@ -133,7 +173,6 @@ public:
             domain->iFFT(az); domain->iFFT(bz); domain->iFFT(cz);
             const Scalar coset = Scalar::multiplicative_generator;
             domain->cosetFFT(az, coset); domain->cosetFFT(bz, coset); domain->cosetFFT(cz, coset);
-            #pragma omp parallel for
             for (std::size_t i = 0; i < rows; ++i) az[i] = az[i] * bz[i] - cz[i];
             domain->divide_by_Z_on_coset(az);
             domain->icosetFFT(az, coset);

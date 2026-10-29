@@ -20,6 +20,11 @@ set(NKR_ZKP_LIGHTZK_DEPS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/lightzk/de
 
 find_package(OpenMP REQUIRED)
 
+# Keep libff/libfqfft single-threaded.  Protocol CPU benchmarks rely on their
+# Prove paths being single-threaded; Setup parallelism is introduced explicitly
+# at the operator call sites instead of through libff's global MULTICORE switch.
+set(MULTICORE OFF CACHE BOOL "Disable dependency-wide OpenMP parallelism" FORCE)
+
 if(NOT IS_DIRECTORY "${NKR_ZKP_LIGHTZK_DEPS_DIR}/libsnark")
     message(FATAL_ERROR "lightZK dependencies not found at ${NKR_ZKP_LIGHTZK_DEPS_DIR}")
 endif()

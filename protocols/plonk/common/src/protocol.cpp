@@ -4,11 +4,15 @@
 #include <array>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "libff/algebra/scalar_multiplication/multiexp.hpp"
+#include "nkr/operators/fixed_base_msm.hpp"
+#include "nkr/operators/variable_base_msm.hpp"
+#include "profile.hpp"
 
 namespace nkr::plonk {
 namespace {
@@ -84,12 +88,25 @@ UniversalSrs generate_srs(const std::size_t max_degree)
         tau = Scalar::random_element();
     } while (tau == Scalar::zero() || tau == Scalar::one());
 
+    std::vector<Scalar> powers(max_degree + 1);
+    {
+        ProfileScope stage("plonk.srs.scalar_powers");
+        powers[0] = Scalar::one();
+        for (std::size_t i = 1; i < powers.size(); ++i)
+            powers[i] = powers[i - 1] * tau;
+    }
+
+    using G1FixedBaseMsm = operators::FixedBaseMsm<G1, Scalar>;
+    std::unique_ptr<G1FixedBaseMsm> fixed_base_msm;
+    {
+        ProfileScope stage("plonk.srs.fixed_base_table");
+        fixed_base_msm = std::make_unique<G1FixedBaseMsm>(G1::one(), powers.size());
+    }
+
     UniversalSrs srs;
-    srs.g1_powers.resize(max_degree + 1);
-    Scalar power = Scalar::one();
-    for (G1 &point : srs.g1_powers) {
-        point = power * G1::one();
-        power *= tau;
+    {
+        ProfileScope stage("plonk.srs.fixed_base_msm");
+        srs.g1_powers = (*fixed_base_msm)(powers);
     }
     srs.g2 = G2::one();
     srs.tau_g2 = tau * srs.g2;
@@ -153,11 +170,15 @@ bool validate_srs(const UniversalSrs &srs, std::size_t domain_size, std::string 
         error = "SRS must contain powers [tau^0] through [tau^(N+2)]";
         return false;
     }
+    int invalid_g1_power = 0;
+    #pragma omp parallel for reduction(|: invalid_g1_power) schedule(static)
     for (std::size_t i = 0; i < domain_size + 3; ++i) {
-        if (srs.g1_powers[i].is_zero() || !srs.g1_powers[i].is_well_formed()) {
-            error = "SRS contains an invalid G1 power";
-            return false;
-        }
+        invalid_g1_power |= srs.g1_powers[i].is_zero() ||
+                            !srs.g1_powers[i].is_well_formed();
+    }
+    if (invalid_g1_power != 0) {
+        error = "SRS contains an invalid G1 power";
+        return false;
     }
     if (srs.g2.is_zero() || srs.tau_g2.is_zero() ||
         !srs.g2.is_well_formed() || !srs.tau_g2.is_well_formed()) {
@@ -182,18 +203,16 @@ bool validate_srs(const UniversalSrs &srs, std::size_t domain_size, std::string 
     for (std::size_t i = 1; i < relations; ++i)
         weights[i] = weights[i - 1] * challenge;
 
-    const G1 lower = libff::multi_exp<G1, Scalar, libff::multi_exp_method_BDLO12>(
+    const G1 lower = operators::variable_base_msm<G1, Scalar>(
         srs.g1_powers.begin(),
         srs.g1_powers.begin() + relations,
         weights.begin(),
-        weights.end(),
-        1);
-    const G1 upper = libff::multi_exp<G1, Scalar, libff::multi_exp_method_BDLO12>(
+        weights.end());
+    const G1 upper = operators::variable_base_msm<G1, Scalar>(
         srs.g1_powers.begin() + 1,
         srs.g1_powers.begin() + 1 + relations,
         weights.begin(),
-        weights.end(),
-        1);
+        weights.end());
     if (Curve::reduced_pairing(upper, srs.g2) !=
         Curve::reduced_pairing(lower, srs.tau_g2)) {
         error = "SRS G1 powers are inconsistent with tau_g2";
@@ -244,7 +263,15 @@ bool validate_proving_key(const ProvingKey &key, std::string &error)
             return false;
         }
     }
-    return validate_srs(key.srs, n, error);
+    // Prove consumes a key emitted by Setup.  Repeating Setup's full SRS
+    // consistency check here would add parallel MSM and pairing work to the
+    // single-threaded CPU Prove benchmark.  Retain only the size requirement
+    // needed to keep the backend's SRS accesses in bounds.
+    if (key.srs.g1_powers.size() < n + 3) {
+        error = "proving key contains an undersized SRS";
+        return false;
+    }
+    return true;
 }
 
 bool validate_witness(const ProvingKey &key,

@@ -40,9 +40,10 @@ make plonk-test-arithmetization
 `backends/cpu` 已实现经典三线 PLONK 的预处理阶段：
 
 - 检查计算域、选择器、复制置换、SRS 次数上限和 SRS 幂次一致性；
+- 自动生成 SRS 时，先构造 `1, tau, ..., tau^(N+2)`，再复用 G1 固定基窗口表并行生成全部幂次点；
 - 选择互不相交的 `H`、`k1·H`、`k2·H`，并把线槽置换编码为三个置换多项式；
 - 对五个选择器和三个置换多项式分别执行 N 点 iNTT；
-- 使用单项式形式 SRS 完成八次 KZG MSM 承诺；
+- 使用单项式形式 SRS，以调用层分块并行的 BDLO12 MSM 完成八次 KZG 承诺；
 - 在 `M = 4N` 的陪集域上缓存八个固定多项式的点值；
 - 在 Proving Key 中缓存 Setup 生成的 `1, omega, ..., omega^(N-1)`，供 Prove 直接使用；
 - 分别生成包含固定多项式数据的 Proving Key 和精简的 Verification Key。
@@ -62,6 +63,8 @@ CPU Prove 按 PDF 的五轮流程实现 wire 盲化承诺、置换累积多项�
 ```bash
 make plonk-test-cpu-prove-verify
 ```
+
+Setup 的调用层并行度由 `OMP_NUM_THREADS` 控制，但不启用 libff/libfqfft 的全局 `MULTICORE` 宏。CPU Prove 作为比较基准保持单线程。使用 `--profile` 时，CPU Setup 会分别报告 SRS 标量幂、固定基窗口表、FixMSM、域准备、置换构造，以及每个固定多项式的 iNTT、MSM 和 coset NTT；CPU Prove 会报告五轮总耗时，并进一步细分 wire/quotient/opening MSM、batch inversion、grand product、coset NTT、商多项式逐点评估、inverse coset NTT、线性化和 synthetic division。
 
 ## 产物序列化与命令行
 

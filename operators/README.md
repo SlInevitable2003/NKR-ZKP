@@ -4,7 +4,10 @@
 
 - `cuda/`：BN254 域、曲线、NTT、MSM 及设备运行时辅助功能的 NVIDIA 实现。
 - `hip/`：同一组算子的 HIP 实现。
+- `include/nkr/operators/`：CPU 协议共用的调用层算子。目前提供基于 libff
+  窗口表的固定基批量标量乘，以及显式分块的并行变基 MSM。
 
 CUDA 和 HIP 有意保留各自独立的内核。两者实现相同的抽象算子边界，并使用与协议无关的测试向量进行验证，但不会通过宏强行合并为同一份内核源码。
 
-目前 CPU 协议后端直接使用内置的 libff/libfqfft 原语。待多个协议都具备可用的 CPU 实现、且确实能从统一封装中获益时，再增加 CPU 算子门面。
+CPU 算子不会开启 libff/libfqfft 的全局 `MULTICORE` 宏。Setup 在公共算子的
+调用层使用 OpenMP；Prove 仍调用单线程 libff 原语，避免改变 CPU 基准口径。
