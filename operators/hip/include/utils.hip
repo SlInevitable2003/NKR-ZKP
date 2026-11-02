@@ -9,7 +9,12 @@
 
 #include <hip/hip_runtime.h>
 
-inline size_t ceil_div(size_t a, size_t b) { return (a + b - 1) / b; }
+// Polynomial kernels also use this helper while executing on the device.
+// DCC does not implicitly make ordinary inline functions device-callable.
+__host__ __device__ inline size_t ceil_div(size_t a, size_t b)
+{
+   return (a + b - 1) / b;
+}
 inline size_t round_up(size_t a, size_t b) { return ceil_div(a, b) * b; }
 inline size_t round_down(size_t a, size_t b) { return a / b * b; }
 inline size_t log2_floor(size_t a) { return 63 - __builtin_clzll(a); }
