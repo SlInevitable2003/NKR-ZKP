@@ -4,6 +4,12 @@ add_library(nkr_groth16_hip STATIC
 target_compile_features(nkr_groth16_hip PUBLIC cxx_std_17 hip_std_17)
 target_compile_options(nkr_groth16_hip PRIVATE
     $<$<COMPILE_LANGUAGE:HIP>:-O2 -fgpu-rdc -gline-tables-only>)
+# DTK/DCC does not add HIP device-link mode merely because the executable's
+# LINKER_LANGUAGE is HIP. Propagate the matching RDC link flags to every final
+# executable which consumes this static archive.
+target_link_options(nkr_groth16_hip INTERFACE
+    $<$<LINK_LANGUAGE:HIP>:-fgpu-rdc>
+    $<$<LINK_LANGUAGE:HIP>:--hip-link>)
 target_include_directories(nkr_groth16_hip PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(nkr_groth16_hip PUBLIC nkr_groth16_common nkr_operators_hip)
 target_compile_definitions(nkr_groth16_hip PUBLIC CURVE_ALT_BN128)
