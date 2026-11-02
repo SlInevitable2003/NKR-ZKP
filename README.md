@@ -209,6 +209,58 @@ make plonk-test-cpu-prove-verify
 
 自动生成的 SRS 仅用于本地开发和功能测试，不是可用于生产环境的多方可信设置。更详细的算术化、Transcript、文件格式和 CPU 协议实现说明见 [protocols/plonk/README.md](protocols/plonk/README.md)。
 
+## zk-STARK / Winterfell 构建与运行
+
+zk-STARK 相关代码位于 `protocols/stark/winterfell`，是一个独立的 Rust
+workspace。它包含 AIR、有限域与 FFT、Merkle 承诺、FRI、Prover、Verifier
+以及示例程序。与 Groth16 和 PLONK 不同，STARK 不需要可信设置；示例程序会在
+一次运行中构造执行轨迹、生成证明、完成序列化往返并验证证明。
+
+当前集成保留的是 Winterfell 多线程 CPU 实现，尚未接入本仓库的 CUDA/HIP
+共享算子。构建时启用 `concurrent` feature，由 Rayon 并行执行证明计算；
+`THREADS` 通过 `RAYON_NUM_THREADS` 控制工作线程数。构建需要 Rust 1.87 和
+Cargo，工具链版本记录在 `protocols/stark/winterfell/rust-toolchain.toml`。
+
+在仓库根目录构建 release 版本：
+
+```bash
+make stark THREADS=8
+```
+
+运行矩阵乘法证明与验证示例：
+
+```bash
+make stark-matmul THREADS=8 MATRIX_SIZE=8
+make stark-matmul THREADS=8 MATRIX_SIZE=8 PROFILE=1
+```
+
+`MATRIX_SIZE` 必须是不小于 2 的 2 的幂。`PROFILE=1` 会额外输出输入生成、
+矩阵计算、执行轨迹构造、证明生成和验证等阶段耗时。生成的示例程序位于：
+
+```text
+protocols/stark/winterfell/target/release/winterfell
+```
+
+也可以直接查看和运行 Winterfell 自带示例：
+
+```bash
+protocols/stark/winterfell/target/release/winterfell --help
+RAYON_NUM_THREADS=8 \
+  protocols/stark/winterfell/target/release/winterfell \
+  matrix-mul -n 8 --profile
+```
+
+示例程序还包含 Fibonacci、乘法 Fibonacci、VDF、Rescue hash chain、
+随机化 AIR permutation、Merkle membership 和 Lamport+ signature 等 AIR。
+可通过 `--hash_fn`、`--queries`、`--blowup`、`--grinding`、
+`--field_extension` 与 `--folding` 调整证明参数；这些参数会影响证明时间、
+证明大小和安全级别。
+
+需要注意，当前 Winterfell 是未经审计的研究实现，不能用于生产环境；上游还
+明确说明当前证明不具备完美零知识，因此在必须隐藏秘密见证的场景中不能仅凭
+“zk-STARK”名称假定其满足隐私要求。更详细的组件和命令说明见
+[protocols/stark/README.md](protocols/stark/README.md)。
+
 ## 分层规则
 
 - `app/` 只负责解析命令和组织文件流程，入口实现直接放在该目录，不设置空的 `include/`、`src/` 或 `backends/` 子层级。
@@ -236,3 +288,5 @@ make plonk-test-cpu-prove-verify
 - `PLONK_DATA_DIR`：PLONK 产物目录，默认为 `build/plonk/data`。
 - `PLONK_CUDA_MATRIX_SIZE`：`plonk-test-cuda` 使用的矩阵规模，默认为 `10`。
 - `PLONK_HIP_MATRIX_SIZE`：`plonk-test-hip` 使用的矩阵规模，默认为 `10`。
+- `THREADS`：Winterfell/Rayon 工作线程数，默认为 `4`；
+- `MATRIX_SIZE`：Winterfell 矩阵乘法示例规模，默认为 `4`，必须是不小于 2 的 2 的幂。
