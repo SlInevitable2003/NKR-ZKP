@@ -3,20 +3,13 @@
 #include <random>
 #include <vector>
 
-#include <thrust/copy.h>
-#include <thrust/execution_policy.h>
-
-// #include <cooperative_groups.h>
-#include <hip/hip_cooperative_groups.h>
 #include "r1cs/spmat.hpp"
 #include "utils.hip"
 
 template <typename T>
 __global__ void sparse_matrix_vector_multiplication(size_t rows, const uint32_t *row_ptr, const uint32_t *col_idx, const T *values, const T *x, T *y)
 {
-    namespace cg = cooperative_groups;
-    cg::grid_group g = cg::this_grid();
-    size_t row = g.thread_rank();
+    const size_t row = blockIdx.x * blockDim.x + threadIdx.x;
     if (row >= rows) return;
 
     T sum = T::one(1);
@@ -45,35 +38,35 @@ public:
         arena.commit();
 
         for (size_t i = 0; i < instances; i++) {
-            std::vector<uint32_t> buffer_rp(mats[i]->row_ptr.size()), buffer_ci(mats[i]->col_idx.size());
-            #pragma omp parallel for
-            for (size_t j = 0; j < buffer_rp.size(); j++) buffer_rp[j] = static_cast<uint32_t>(mats[i]->row_ptr[j]);
-            #pragma omp parallel for
-            for (size_t j = 0; j < buffer_ci.size(); j++) buffer_ci[j] = static_cast<uint32_t>(mats[i]->col_idx[j]);
-            
-            thrust::copy(thrust::device, buffer_rp.begin(), buffer_rp.end(), row_ptr[i]);
-            thrust::copy(thrust::device, buffer_ci.begin(), buffer_ci.end(), col_idx[i]);
-
-            hipMemcpy(mat_values[i], mats[i]->values.data(), mats[i]->values.size() * sizeof(HostFT), hipMemcpyHostToDevice);
+            HIP_CHECK(hipMemcpy(row_ptr[i], mats[i]->row_ptr.data(),
+                                mats[i]->row_ptr.size() * sizeof(uint32_t),
+                                hipMemcpyHostToDevice));
+            HIP_CHECK(hipMemcpy(col_idx[i], mats[i]->col_idx.data(),
+                                mats[i]->col_idx.size() * sizeof(uint32_t),
+                                hipMemcpyHostToDevice));
+            HIP_CHECK(hipMemcpy(mat_values[i], mats[i]->values.data(),
+                                mats[i]->values.size() * sizeof(HostFT),
+                                hipMemcpyHostToDevice));
         }
     }
 
     void spmvm(FieldT *multiplier, FieldT **prods)
     {
         hipStream_t stream[instances];
-        for (int i = 0; i < instances; i++) hipStreamCreate(&stream[i]);
+        for (size_t i = 0; i < instances; ++i)
+            HIP_CHECK(hipStreamCreate(&stream[i]));
 
         const int block_size = 256;
 
-        #pragma omp parallel for
-        for (int i = 0; i < instances; i++) {
+        for (size_t i = 0; i < instances; ++i) {
             sparse_matrix_vector_multiplication<<<ceil_div(rows, block_size), block_size, 0, stream[i]>>>
                 (rows, row_ptr[i], col_idx[i], mat_values[i], multiplier, prods[i]);
+            HIP_CHECK(hipGetLastError());
         }
 
-        for (int i = 0; i < instances; i++) {
-            hipStreamSynchronize(stream[i]);
-            hipStreamDestroy(stream[i]);
+        for (size_t i = 0; i < instances; ++i) {
+            HIP_CHECK(hipStreamSynchronize(stream[i]));
+            HIP_CHECK(hipStreamDestroy(stream[i]));
         }
     }
 };

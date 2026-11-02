@@ -11,7 +11,7 @@
 
 原有的 Rust CPU/CUDA 代码已删除。它们基于不同的软件栈，实现的是另一种带查找功能的四线协议，因此不会作为当前框架的实现基础。
 
-当前已实现三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、CUDA Prove、基于共享 `BinaryArchive` 的产物序列化，以及完整的 `plonk-gen/setup/prove/verify` 命令行流程。低层协议文档见 `docs/plonk_protocol_low_level.pdf`。
+当前已实现三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、CUDA Prove、面向 DCU 的 HIP Prove、基于共享 `BinaryArchive` 的产物序列化，以及完整的 `plonk-gen/setup/prove/verify` 命令行流程。低层协议文档见 `docs/plonk_protocol_low_level.pdf`。
 
 ## Plonkish 算术化 Manager
 
@@ -79,7 +79,7 @@ CUDA Setup 当前有意委托 CPU Setup，不在 GPU 上生成 SRS；NTT 幂表�
 
 `common/src/io.cpp` 提供 `circuit`、`witness`、`srs`、`proving-key`、`verification-key`、`proof` 的读写，复用共享的 `BinaryArchive`（见 `common/include/binary_archive.hpp`）。文件以魔数 `LKZ1` 和版本号开头，向量带字节长度前缀；元素按原始内存布局读写，因此要求读写程序使用兼容的 ABI、依赖版本与构建配置。该格式用于本项目程序之间传递产物，不承诺规范化的跨实现编码。
 
-与 Groth16 一样，PLONK 始终使用同名的四个统一程序，不为不同后端分别生成可执行文件。CPU 构建支持 `--backend cpu`；CUDA 构建同时支持 `--backend cpu` 和 `--backend cuda`。HIP 协议适配仍是框架，暂不支持 `--backend hip`。`plonk-gen` 和 `plonk-verify` 不接收 `--backend`。
+与 Groth16 一样，PLONK 始终使用同名的四个统一程序，不为不同后端分别生成可执行文件。CPU 构建支持 `--backend cpu`；CUDA 构建支持 `cpu/cuda`；HIP 构建支持 `cpu/hip`。HIP Setup 与 CUDA Setup 一样复用 CPU 实现，HIP Prove 使用不依赖 warp shuffle 和 cooperative groups 的 DCU 安全算子。`plonk-gen` 和 `plonk-verify` 不接收 `--backend`。
 
 `plonk-gen` 目前支持 `matmul` 与 `fibonacci` 两种用例；`plonk-setup` 在未提供 `--srs` 时现场生成并写出 SRS。下面给出两种电路的完整 CPU 命令，其中第二次 Setup 复用第一次生成的 SRS：
 
@@ -116,6 +116,20 @@ PLONK_BIN=build/plonk/bin
 
 ```bash
 make plonk-test-cuda CUDA_ARCH=120 PLONK_CUDA_MATRIX_SIZE=10
+```
+
+HIP/DCU 使用同一套流程，Setup 复用 CPU 后端，Prove 使用普通 kernel、全局 scan 和共享内存归约，不依赖 warp vote/shuffle 或 cooperative groups：
+
+```bash
+make plonk-hip HIP_ARCH=<gfx-arch>
+
+PLONK_BIN=build/plonk/bin
+"$PLONK_BIN/plonk-gen" matmul 10
+"$PLONK_BIN/plonk-setup" --backend hip matmul_10.bin
+"$PLONK_BIN/plonk-prove" --backend hip matmul_10.bin
+"$PLONK_BIN/plonk-verify" matmul_10.bin
+
+make plonk-test-hip HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=10
 ```
 
 上述命令使用独立的 `build/plonk` 构建树，默认产物目录为 `build/plonk/data`。与 Groth16 相同，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖该目录；使用默认值时无需传入。自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。CPU 快速回归可执行 `make plonk-test-cpu`。

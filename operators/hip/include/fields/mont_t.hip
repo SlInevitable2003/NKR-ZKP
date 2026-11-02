@@ -37,6 +37,8 @@ class alignas(((N+63)/64)&1 ? 8 : 16) mont_t {
 public:
     static const size_t nbits = N;
     static constexpr size_t __device__ bit_length() { return N; }
+    static constexpr size_t limb_count = (N + 31) / 32;
+    static inline uint32_t modulus_limb(size_t i) { return MOD[i]; }
     static const uint32_t degree = 1;
     using mem_t = mont_t;
 
@@ -417,7 +419,7 @@ public:
         uint32_t carry = 0;
         tmp[0] = __builtin_subc(MOD[0], even[0], 0, &carry);
         #pragma unroll
-        for (i = 0; i < n; i++) {
+        for (i = 1; i < n; i++) {
             tmp[i] = __builtin_subc(MOD[i], even[i], carry, &carry);
             is_zero |= even[i];
         }
@@ -455,7 +457,7 @@ public:
         tmp[0] = __builtin_subc(MOD[0], a[0], 0, &borrow);
 
         #pragma unroll
-        for (size_t i = 0; i < n; i++) {
+        for (size_t i = 1; i < n; i++) {
             tmp[i] = __builtin_subc(MOD[i], a[i], borrow, &borrow);
             is_zero |= a[i];
         }
@@ -1176,365 +1178,26 @@ public:
         // return even; // implicit cast to mont_t performs the reduction
     }
 
-    inline mont_t shfl_down(uint32_t off) const
-    {
-        mont_t ret;
-        //
-        for (size_t i = 0; i < n; i++)
-            ret[i] = __shfl_down(even[i], off, 32);
-
-        return ret;
-    }
-    inline mont_t shfl(uint32_t idx, uint32_t mask = 0xffffffff) const
-    {
-        mont_t ret;
-        // 
-        for (size_t i = 0; i < n; i++)
-            ret[i] = __shfl(even[i], idx, 32);
-
-        return ret;
-    }
-
-protected:
-    template<typename vec_t>
-    static inline vec_t shfl_xor(const vec_t& a, uint32_t idx = 1)
-    {
-        vec_t ret;
-        for (size_t i = 0; i < sizeof(vec_t)/sizeof(uint32_t); i++)
-            ret[i] = __shfl_xor(a[i], idx, 32);
-        return ret;
-    }
-
-private:
-    // Euclidean inversion based on https://eprint.iacr.org/2020/972
-    // and <blst>/src/no_asm.h.
-
-    struct approx_t  { 
-    	uint32_t lo, hi; 
-    	__host__ __device__ approx_t& operator=(uint64_t val){
-    	     this->lo = static_cast<uint32_t>(val & 0xFFFFFFFF);
-    	     this->hi = static_cast<uint32_t>((val>>32) & 0xFFFFFFFF);
-    	     return *this;
-    	}
-    };
-    struct factorx_t { uint32_t f0, g0; };
-
-    static inline uint32_t lshift_2(uint32_t hi, uint32_t lo, uint32_t i)
-    {
-        // uint32_t ret;
-        // asm("shf.l.clamp.b32 %0, %1, %2, %3;" : "=r"(ret) : "r"(lo), "r"(hi), "r"(i));
-        // return ret;
-        if (i == 0) return hi;
-	if (i < 32)
-            return (hi << i) | (lo >> (32 - i));
-	return lo << (i-32);
-    }
-
-    static inline void ab_approximation_n(approx_t& a_, const mont_t& a,
-                                          approx_t& b_, const mont_t& b)
-    {
-        size_t i = n-1;
-
-        uint32_t a_hi = a[i], a_lo = a[i-1];
-        uint32_t b_hi = b[i], b_lo = b[i-1];
-	
-	bool flag;
-	#pragma unroll
-	for (i--; --i;) {
-	    flag = (a_hi | b_hi) == 0;
-	    a_hi = flag ? a_lo : a_hi;
-	    b_hi = flag ? b_lo : b_hi;
-    	    a_lo = flag ? a[i] : a_lo;
-	    b_lo = flag ? b[i] : b_lo; 
-	}	
-        
-        uint32_t off = __clz(a_hi | b_hi);
-        /* |off| can be LIMB_T_BITS if all a[2..]|b[2..] were zeros */
-
-        a_ = approx_t{a[0], lshift_2(a_hi, a_lo, off)};
-        b_ = approx_t{b[0], lshift_2(b_hi, b_lo, off)};
-    }
-
-    static inline void cswap(uint32_t& a, uint32_t& b, uint32_t mask)
-    {
-        uint32_t xorm = (a ^ b) & mask;
-        a ^= xorm;
-        b ^= xorm;
-    }
-
-    static inline factorx_t inner_loop_x(approx_t a, approx_t b)
-    {
-        const uint32_t tid = threadIdx.x&1;
-        const uint32_t odd = 0 - tid;
-
-        // even thread calculates |f0|,|f1|, odd - |g0|,|g1|
-        uint32_t fg0 = tid^1, fg1 = tid;
-        uint32_t alo = a.lo, ahi = a.hi, blo = b.lo, bhi = b.hi;
-
-        // in the odd thread |a| and |b| are in reverse order, compensate...
-        cswap(alo, blo, odd);
-        cswap(ahi, bhi, odd);
-
-        uint64_t a_full = ((uint64_t)ahi << 32) | alo;
-        uint64_t b_full = ((uint64_t)bhi << 32) | blo;
-
-        #pragma unroll 2
-        for (uint32_t n = 32-2; n--;) {
-            bool is_odd = (a_full&1) != 0;
-            bool brw = is_odd && (a_full < b_full);
-            uint64_t next_a = a_full;
-            if (is_odd) {
-                next_a = brw ? (b_full - a_full) : (a_full - b_full);
-            }
-
-            b_full = brw ? a_full : b_full;
-
-            uint32_t fgx = brw ? fg0 : fg1;
-            fg0  = brw ? fg1 : fg0;
-            fg0 = is_odd ? (fg0 - fgx) : fg0;
-            fg1 = fgx << 1;
-            a_full = next_a >> 1;
-        }
-
-        // even thread needs |f0|,|g0|, odd - |g1|,|f1|, in this order
-        cswap(fg0, fg1, odd);
-
-        fg1 = __shfl_xor(fg1, 1, 32);
-
-        return factorx_t{fg0, fg1};
-    }
-
-    static inline factorx_t inner_loop_x(uint32_t a, uint32_t b, uint32_t n)
-    {
-        const uint32_t tid = threadIdx.x&1;
-        const uint32_t odd = 0 - tid;
-
-        // even thread calculates |f0|,|f1|, odd - |g0|,|g1|
-        uint32_t fg0 = tid^1, fg1 = tid;
-
-        // in the odd thread |a| and |b| are in reverse order, compensate...
-        cswap(a, b, odd);
-
-        #pragma unroll 1
-        while (n--) {
-            bool is_odd = (a&1) != 0;
-            bool borrow = is_odd && (a < b);
-            uint32_t a_next = a;
-
-            if (is_odd) {
-                a_next = borrow ? (b - a) : (a - b);
-            }
-            b = borrow ? a : b;
-            uint32_t fgx = borrow ? fg0 : fg1;
-            fg0  = borrow ? fg1 : fg0;
-            fg0 = borrow ? (fg0 - fgx) : fg0;
-
-            fg1 = fgx << 1;
-            a = a_next >> 1;
-
-            //asm("}");
-        }
-
-        // we care only about |f1| and |g1| in this subroutine
-        fg0 = __shfl_xor(fg1, 1, 32);
-
-        return factorx_t{fg1, fg0};
-    }
-
-    template<typename vec_t>
-    static inline uint32_t cneg_v(vec_t& ret, const vec_t& a, uint32_t neg)
-    {
-        const size_t n = sizeof(vec_t)/sizeof(uint32_t);
-
-        // asm("xor.b32 %0, %1, %2;"    : "=r"(ret[0]) : "r"(a[0]), "r"(neg));
-        // asm("add.cc.u32 %0, %0, %1;" : "+r"(ret[0]) : "r"(neg&1));
-        // for (size_t i=1; i<n; i++)
-        //     asm("xor.b32 %0, %1, %2; addc.cc.u32 %0, %0, 0;"
-        //         : "=r"(ret[i]) : "r"(a[i]), "r"(neg));
-
-        // uint32_t sign;
-        // asm("shr.s32 %0, %1, 31;" : "=r"(sign) : "r"(ret[n-1]));
-        
-        ret[0] = a[0] ^ neg;
-        uint32_t carry = 0;
-        ret[0] = __builtin_addc(ret[0], neg & 1, 0, &carry);
-        #pragma unroll
-        for (size_t i = 1; i < n; i++) {
-            ret[i] = a[i] ^ neg;
-            ret[i] = __builtin_addc(ret[i], 0, carry, &carry);
-        }
-
-        uint32_t sign = ((int32_t)ret[n-1]) >> 31;
-        return sign;
-    }
-
-    static inline void smul_n_shift_x(mont_t& a, uint32_t& f_,
-                                      mont_t& b, uint32_t& g_)
-    {
-        mont_t even, odd;
-        uint32_t neg;
-        size_t i;
-
-        neg = ((int32_t)f_) >> 31;
-        auto f = (f_ ^ neg) - neg;
-        (void)cneg_v(a, a, neg);
-        mul_n(&even[0], &a[0], f);
-        mul_n(&odd[0], &a[1], f);
-        odd[n-1] -= f & neg;
-
-        neg = ((int32_t)g_) >> 31;
-        auto g = (g_ ^ neg) - neg;
-        (void)cneg_v(b, b, neg);
-        uint32_t c1 = cmad_n(&even[0], &b[0], g);
-        odd[n-1] += c1;
-        cmad_n(&odd[0], &b[1], g);
-        odd[n-1] -= g & neg;
-
-        c1 = cadd_n(&even[1], &odd[0], n-1);
-        odd[n-1] += c1;
-
-        #pragma unroll
-        for (i = 0; i < n-1; i++) {
-            even[i] = (even[i] >> 30) | (even[i+1] << 2);
-        }
-        even[i] = (even[i] >> 30) | (odd[i] << 2);
-
-        neg = ((int32_t)odd[i]) >> 31;
-        f_ = (f_ ^ neg) - neg;
-        g_ = (g_ ^ neg) - neg;
-        (void)cneg_v(a, even, neg);
-    }
-
-    static inline uint32_t smul_2x(wide_t& u, uint32_t f,
-                                   wide_t& v, uint32_t g)
-    {
-        wide_t even, odd;
-        uint32_t neg;
-
-        neg = ((int32_t)f) >> 31;
-        f = (f ^ neg) - neg;
-        neg = cneg_v(u, u, neg);
-        mul_n(&even[0], &u[0], f, 2*n);
-        mul_n(&odd[0], &u[1], f, 2*n);
-        odd[2*n-1] -= f & neg;
-
-        neg = ((int32_t)g) >> 31;
-        g = (g ^ neg) - neg;
-        neg = cneg_v(v, v, neg);
-        uint32_t c1 = cmad_n(&even[0], &v[0], g, 2*n);
-        odd[2*n-1] += c1;
-        cmad_n(&odd[0], &v[1], g, 2*n);
-        odd[2*n-1] -= g & neg;
-
-        u[0] = even[0];
-        u[1] = __builtin_addc(even[1], odd[0], 0, &c1);
-        #pragma unroll
-        for (size_t i = 2; i < 2*n; i++)
-            u[i] = __builtin_addc(even[i], odd[i-1], c1, &c1);
-        odd[2*n-1] += c1;
-
-        return odd[2*n-1];
-        
-    }
-
-protected:
-    /*
-     * Even thread holds |a| and |u|, while odd one - |b| and |v|. They need
-     * to exchange the values, but then perform the multiplications in
-     * parallel. The improvement [for 38x-bit moduli] is >20% and ~5.5KB
-     * code size reduction in comparison to a single-threaded version.
-     */
-    static inline mont_t ct_inverse_mod_x(const mont_t& inp)
-    {
-	/*if(threadIdx.x < 8)
-            printf("lane %d partner %d\n", threadIdx.x,
-                __shfl_xor(threadIdx.x,1,32));*/
-        if (N%32 != 0 && MOD == MODx) asm("s_trap 2;");
-
-        const uint32_t tid = threadIdx.x&1;
-        const uint32_t nbits = 2*n*32;
-
-        mont_t a_b = csel(MOD, inp, tid);
-        wide_t u_v, v_u;
-
-        u_v[0] = tid^1;
-        v_u[0] = tid;
-        #pragma unroll
-        for (size_t i=1; i<2*n; i++)
-            u_v[i] = v_u[i] = 0;
-
-        #pragma unroll 1
-        for (uint32_t i=0; i<nbits/(32-2); i++) {
-            mont_t b_a = shfl_xor(a_b);
-            approx_t a_, b_;
-            ab_approximation_n(a_, a_b, b_, b_a);
-            auto fg = inner_loop_x(a_, b_);
-            smul_n_shift_x(a_b, fg.f0, b_a, fg.g0);
-            (void)smul_2x(u_v, fg.f0, v_u, fg.g0);
-            v_u = shfl_xor(u_v);
-        }
-
-        uint32_t b_a = __shfl_xor(a_b[0], 1, 32);
-        auto fg = inner_loop_x(a_b[0], b_a, nbits%30);
-        auto top = (int32_t)smul_2x(u_v, fg.f0, v_u, fg.g0);
-        //if (threadIdx.x == 0)
-	  //  printf("top in ct_inverse_mod_x %d\n", top);
-	assert(top==0|top==1|top==-1 && "top error in ct_inverse_mod_x");
-	bool flag = top < 0;
-        if (flag) {
-	    uint32_t carry = 0;
-            u_v[n] = __builtin_addc(u_v[n], MODx[0], 0, &carry);
-            #pragma unroll
-            for (size_t i = 1; i < n; i++) {
-                u_v[n+i] = __builtin_addc(u_v[n+i], MODx[i], carry, &carry);
-            }
-            top += (int32_t)carry;
-        }
-        
-        auto sign = 0 - top;        /* top is 1, 0 or -1 */
-        top |= sign;
-        #pragma unroll
-        for (size_t i=0; i<n; i++)
-            a_b[i] = MODx[i] & top;
-        sign >>= 31;
-        (void)cneg_v(a_b, a_b, sign);
-        cadd_n(&u_v[n], &a_b[0]);
-
-        mont_t ret = u_v;
-        ret.to();
-        return ret;
-    }
-
 public:
     inline mont_t reciprocal() const
     {
-        bool a_zero = is_zero();
-        mont_t a = csel(ONE, even, a_zero);
-	if (a_zero) {
-            assert("csel should return 1 for zero input" && a.is_one());
+        if (is_zero()) { mont_t zero; zero.zero(); return zero; }
+        mont_t result = one();
+        for (int bit = static_cast<int>(N) - 1; bit >= 0; --bit) {
+            result = result ^ 2;
+            const size_t limb = static_cast<size_t>(bit) / 32;
+            uint32_t exponent_limb = MOD[limb];
+            if (limb == 0) exponent_limb -= 2;
+            if ((exponent_limb >> (bit % 32)) & 1U) result *= *this;
         }
-        mont_t b = shfl_xor(a);
-        a *= b;                     // a*b
-        a = ct_inverse_mod_x(a);    // 1/(a*b)
-        a *= b;                     // b/(a*b) == 1/a
-	if (!a_zero) {
-	    assert("a*a^-1 should be 1" && (a*even).is_one());
-	}
-        return czero(a, a_zero);
+        return result;
     }
-    friend inline mont_t operator/(int one, const mont_t& a)
-    {   if (one != 1) asm("s_trap 2;"); return a.reciprocal();   }
-    friend inline mont_t operator/(const mont_t& a, const mont_t& b)
-    {   return a * b.reciprocal();   }
-    inline mont_t& operator/=(const mont_t& a)
-    {   return *this *= a.reciprocal();   }
-
-    inline void shfl_bfly(uint32_t laneMask)
-    {
-        #pragma unroll
-        for (size_t i=0; i<n; i++)
-            even[i] = __shfl_xor(even[i], laneMask, 32);
-    }
+    friend inline mont_t operator/(int one_value, const mont_t& value)
+    { if (one_value != 1) __builtin_trap(); return value.reciprocal(); }
+    friend inline mont_t operator/(const mont_t& left, const mont_t& right)
+    { return left * right.reciprocal(); }
+    inline mont_t& operator/=(const mont_t& value)
+    { return *this *= value.reciprocal(); }
 };
 
 # undef inline

@@ -18,7 +18,7 @@
 
 `operators/cuda` 和 `operators/hip` 包含从 LightZK 导入的 BN254 域、曲线、NTT、MSM 及设备运行时原语。Groth16 和 PLONK 都链接这些目标，不再各自保存一份副本。
 
-CUDA 和 HIP 共用接口约定和测试向量，但不共用内核源码。二者在启动策略、归约方式、内存 API 和性能调优方面差异较大，使用宏强行统一源码反而会增加维护难度。
+CUDA 和 HIP 共用接口约定和测试向量，但不共用内核源码。二者在启动策略、归约方式、内存 API 和性能调优方面差异较大，使用宏强行统一源码反而会增加维护难度。面向 DCU 的 HIP 路径不得依赖硬件进位链、warp shuffle 或 cooperative groups；当前以朴素大整数、普通 kernel 和共享内存归约作为兼容性基线。
 
 以下操作属于公共算子层：
 
@@ -59,13 +59,13 @@ Groth16 是外部 `gen/setup/prove/verify` 组织方式的可用参考，但其�
 
 ## PLONK 范围
 
-PLONK 已实现独立的三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、CUDA Prove 和产物 I/O；CUDA Setup 有意复用 CPU Setup，HIP 协议适配仍是框架。已删除的 Rust 代码基于另一条 BLS12 系列曲线，实现的是带查找功能的四线系统，因此不会作为新实现的基础。当前实现范围为：
+PLONK 已实现独立的三线算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、CUDA Prove、DCU/HIP Prove 和产物 I/O；CUDA/HIP Setup 有意复用 CPU Setup。已删除的 Rust 代码基于另一条 BLS12 系列曲线，实现的是带查找功能的四线系统，因此不会作为新实现的基础。当前实现范围为：
 
 - BN254/ALT_BN128；
 - KZG 承诺；
 - 经典三线算术门；
 - 置换大乘积；
-- 以 CPU 实现作为参考，通过公共算子维护 CUDA 适配层，后续再补齐 HIP。
+- 以 CPU 实现作为参考，通过公共算子维护 CUDA 和 DCU/HIP 适配层。
 
 Transcript、挑战顺序、证明字段和多项式次数遵循 `docs/plonk_protocol_low_level.pdf`。Transcript 采用 SHA3-256，并使用“追加消息、挑战后以摘要重置状态”的强 Fiat–Shamir 结构；证明产物继续使用共享 `BinaryArchive`。
 

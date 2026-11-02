@@ -31,7 +31,7 @@ CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各
 ## 当前状态
 
 - Groth16 已有可用的 CPU、CUDA 和 HIP 后端。CPU 后端始终参与构建；配置时可以选择 CUDA 或 HIP 加速后端。
-- PLONK 已实现独立的三线 Plonkish 算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify 和 CUDA Prove；电路、见证、SRS、PK/VK 与证明均通过共享 `BinaryArchive` 读写。CUDA Setup 复用 CPU Setup，HIP 协议适配目前仍是框架。
+- PLONK 已实现独立的三线 Plonkish 算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、CUDA Prove 和面向 DCU 的 HIP Prove；电路、见证、SRS、PK/VK 与证明均通过共享 `BinaryArchive` 读写。CUDA/HIP Setup 复用 CPU Setup。
 - 原有的 Rust PLONK CPU/CUDA 代码已删除。新实现计划以 `docs/plonk_protocol_low_level.pdf` 描述的 BN254、KZG 方案为准。
 - Winterfell 仍作为独立的 Rust CPU 实现保留。
 
@@ -86,7 +86,7 @@ G16=build/groth16/bin
 
 ### 使用 HIP/ROCm 后端
 
-构建前需要确保 CMake 能够找到 HIP/ROCm 工具链。`HIP_ARCH` 应设置为目标 GPU 的 offload target，例如工具链报告的 `gfx...` 值。当前 HIP 后端的 `setup` 在内部委托给 CPU 参考实现，`prove` 使用 HIP 加速；外部仍使用相同的统一接口。
+构建前需要确保 CMake 能够找到 HIP/ROCm 工具链。`HIP_ARCH` 应设置为目标 DCU 的 offload target，例如工具链报告的 `gfx...` 值。HIP 后端的 Setup 和 Prove 均使用设备实现；外部仍使用相同的统一接口。
 
 ```bash
 make groth16-clean
@@ -124,7 +124,9 @@ build/plonk/bin/plonk-verify
 
 `gen` 负责产生电路与见证，`setup` 读取电路并产生 SRS、PK 和 VK，`prove` 读取 PK 与见证产生证明，`verify` 读取 VK、公开输入和证明完成验证。只有 `setup` 与 `prove` 接收 `--backend`；`gen` 和 `verify` 是后端无关的公共程序。
 
-CPU 后端可完整运行。CUDA 构建同时包含 CPU 与 CUDA 后端：Setup 通过统一的 CUDA 后端入口复用 CPU 实现，并将后续证明需要的 NTT 幂表写入 PK；`plonk-prove` 内部先用独立 prepare 阶段上传所有与输入无关的数据，该阶段不计入正式 Prove，然后在 GPU 上完成 NTT、MSM、逐点域运算、逐点求逆、前缀乘积、多项式求值和综合除法；Transcript 和挑战生成保留在 CPU。HIP 目录目前只保留统一接口，PLONK 暂不支持 `--backend hip`。
+CPU 后端可完整运行。CUDA 和 HIP 构建都同时包含 CPU 后端与对应的加速后端：Setup 通过统一的加速后端入口复用 CPU 实现，并将后续证明需要的 NTT 幂表写入 PK；`plonk-prove` 内部先用独立 prepare 阶段上传所有与输入无关的数据，该阶段不计入正式 Prove，然后在设备上完成 NTT、MSM、逐点域运算、逐点求逆、前缀乘积、多项式求值和综合除法；Transcript 和挑战生成保留在 CPU。
+
+HIP 实现以 DCU 兼容性为优先：继续使用无硬件进位链假设的朴素大整数运算；Fp2、MSM、scan、NTT 和多项式算子不依赖 warp shuffle 或 cooperative groups。`make check` 会静态检查这些限制。
 
 ### 使用 CPU 后端
 
@@ -156,6 +158,29 @@ PLONK_BIN=build/plonk/bin
 
 这里的 `plonk-setup --backend cuda` 在内部调用 CPU Setup；Setup 不使用 GPU 生成 SRS 或固定多项式，但会在 CPU 上生成 NTT 幂表并写入 PK。选择 CUDA 后端的意义是保持四阶段接口一致，并让随后读取同一 PK 的 Prove 使用 GPU。PK 格式包含这些预计算数据，更新程序后需要重新运行 Setup，不能复用旧 PK。
 
+### 使用 HIP/DCU 后端
+
+HIP 配置同样生成统一的四个程序。Setup 复用 CPU 实现，Prove 使用 DCU 安全的 HIP 算子；`HIP_ARCH` 取目标机器工具链报告的 `gfx...` offload target。
+
+```bash
+make plonk-clean
+make plonk-hip HIP_ARCH=<gfx-arch>
+PLONK_BIN=build/plonk/bin
+
+"$PLONK_BIN/plonk-gen" matmul 10
+"$PLONK_BIN/plonk-setup" --backend hip matmul_10.bin
+"$PLONK_BIN/plonk-prove" --backend hip matmul_10.bin
+"$PLONK_BIN/plonk-verify" matmul_10.bin
+```
+
+包含共享 HIP 算子对照测试和端到端证明验证的回归命令为：
+
+```bash
+make plonk-test-hip HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=10
+```
+
+`plonk-dcu` 和 `plonk-test-dcu` 是对应 HIP 目标的兼容性别名。
+
 也可以生成 Fibonacci 电路，并显式复用已有的 SRS：
 
 ```bash
@@ -175,6 +200,8 @@ make plonk-cpu
 make plonk-test-cpu
 make plonk-cuda CUDA_ARCH=120
 make plonk-test-cuda CUDA_ARCH=120 PLONK_CUDA_MATRIX_SIZE=10
+make plonk-hip HIP_ARCH=<gfx-arch>
+make plonk-test-hip HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=10
 make plonk-test-arithmetization
 make plonk-test-cpu-setup
 make plonk-test-cpu-prove-verify
@@ -208,3 +235,4 @@ make plonk-test-cpu-prove-verify
 - `PLONK_BIN_DIR`：PLONK 可执行文件目录，默认为 `build/plonk/bin`；
 - `PLONK_DATA_DIR`：PLONK 产物目录，默认为 `build/plonk/data`。
 - `PLONK_CUDA_MATRIX_SIZE`：`plonk-test-cuda` 使用的矩阵规模，默认为 `10`。
+- `PLONK_HIP_MATRIX_SIZE`：`plonk-test-hip` 使用的矩阵规模，默认为 `10`。

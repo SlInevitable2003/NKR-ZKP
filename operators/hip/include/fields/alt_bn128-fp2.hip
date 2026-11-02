@@ -1,152 +1,145 @@
 // Copyright Supranational LLC
-// Licensed under the Apache License, Version 2.0, see LICENSE for details.
-// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0.
 #pragma once
+
 #include "alt_bn128.hip"
 
-# define inline __device__ __attribute__((always_inline))
-# ifdef __GNUC__
-#  define asm __asm__ __volatile__
-# else
-#  define asm asm volatile
-# endif
-
-# ifndef WARP_SZ
-#  define WARP_SZ 32
-# endif
-
+// DCU-safe Fp2 representation. The imported HIP implementation split one Fp2
+// value across two adjacent lanes. DCU shuffle behaviour is not reliable enough
+// for that representation, so both components deliberately stay in one thread.
 namespace alt_bn128 {
 
-class fp2_t : public fp_mont {
-private:
-    static inline uint32_t laneid()
-    {   return threadIdx.x % WARP_SZ;   }
+class fp2_t {
+    fp_mont x[2];
+
+    static __device__ fp_mont inverse_fp(const fp_mont &value)
+    {
+        if (value.is_zero()) {
+            fp_mont zero;
+            zero.zero();
+            return zero;
+        }
+        // Fermat inversion, value^(p-2). MOD is odd, so subtracting two only
+        // changes the least-significant limb.
+        fp_mont result = fp_mont::one();
+        for (int bit = static_cast<int>(fp_mont::nbits) - 1; bit >= 0; --bit) {
+            result = result ^ 2;
+            const size_t limb = static_cast<size_t>(bit) / 32;
+            uint32_t exponent_limb = fp_mont::modulus_limb(limb);
+            if (limb == 0) exponent_limb -= 2;
+            if ((exponent_limb >> (bit % 32)) & 1U) result *= value;
+        }
+        return result;
+    }
 
 public:
     static const uint32_t degree = 2;
+    using mem_t = fp2_t;
 
-    class mem_t { friend fp2_t;
-        fp_mont x[2];
+    __host__ __device__ fp2_t() = default;
+    __device__ fp2_t(const fp_mont &c0, const fp_mont &c1) : x{c0, c1} {}
 
-    public:
-        inline operator fp2_t() const           { return x[threadIdx.x&1]; }
-        inline void zero()                      { x[threadIdx.x&1].zero(); return; }
-        inline void to()                        { x[threadIdx.x&1].to(); return;  }
-        inline void from()                      { x[threadIdx.x&1].from(); return; }
-        inline mem_t& operator=(const fp2_t& a)
-        {   x[threadIdx.x&1] = a; return *this;   }
-    };
+    __device__ void zero() { x[0].zero(); x[1].zero(); }
+    __device__ void to() { x[0].to(); x[1].to(); }
+    __device__ void from() { x[0].from(); x[1].from(); }
+    __device__ bool is_zero() const { return x[0].is_zero() && x[1].is_zero(); }
+    __device__ bool is_zero(const fp2_t &value) const
+    { return is_zero() && value.is_zero(); }
 
-    inline fp2_t()                              {}
-    inline fp2_t(const fp_mont& a) : fp_mont(a) {}
-    inline fp2_t(const mem_t* p)                { *this = p->x[threadIdx.x&1]; }
-    inline void store(mem_t* p) const           { p->x[threadIdx.x&1] = *this; return; }
-
-    friend inline fp2_t operator*(const fp2_t& a, const fp2_t& b)
+    static __device__ fp2_t one(int or_zero = 0)
     {
-        auto id = laneid();
-        auto mask = __ballot(1);
-        auto t0 = b.shfl(id&~1, mask);
-        auto t1 = a.shfl(id^1, mask);
-        auto t2 = b.shfl(id|1, mask);
-        t1.cneg((id&1) == 0);
-
-        return a * fp2_t(t0) + fp2_t(t1 * t2);  // a*t0 + t1*t2;
-    }
-    inline fp2_t& operator*=(const fp2_t& a)
-    {   return *this = *this * a;   }
-
-    inline fp2_t& sqr()
-    {
-        auto id = laneid();
-        fp_mont t0 = shfl(id^1, __ballot(1));
-        fp_mont t1 = *this;
-
-        if ((id&1) == 0) {
-            t1 = (fp_mont)*this + t0;
-            t0 = (fp_mont)*this - t0;
-        }
-        t0 *= t1;
-        t1 = t0 << 1;
-
-        return *this = fp_mont::csel(t1, t0, id&1);
-    }
-    inline fp2_t& operator^=(int p)
-    {   if (p != 2) asm("trap;"); return sqr();     }
-    friend inline fp2_t operator^(fp2_t a, int p)
-    {   if (p != 2) asm("trap;"); return a.sqr();   }
-
-    friend inline fp2_t operator+(const fp2_t& a, const fp2_t& b)
-    {   return (fp_mont)a + (fp_mont)b;   }
-    inline fp2_t& operator+=(const fp2_t& b)
-    {   return *this = *this + b;   }
-
-    friend inline fp2_t operator-(const fp2_t& a, const fp2_t& b)
-    {   return (fp_mont)a - (fp_mont)b;   }
-    inline fp2_t& operator-=(const fp2_t& b)
-    {   return *this = *this - b;   }
-
-    friend inline fp2_t operator<<(const fp2_t& a, unsigned l)
-    {   return (fp_mont)a << l;   }
-    inline fp2_t& operator<<=(unsigned l)
-    {   return *this = *this << l;   }
-
-    inline fp2_t& cneg(bool flag)
-    {   fp_mont::cneg(flag); return *this;  }
-    friend inline fp2_t cneg(fp2_t a, bool flag)
-    {   return a.cneg(flag);   }
-
-    friend inline fp2_t czero(const fp2_t& a, int set_z)
-    {   return czero((fp_mont)a, set_z);   }
-
-    inline bool is_zero() const
-    {
-        auto ret = __ballot(fp_mont::is_zero());
-        return ((ret >> (laneid()&~1)) & 3) == 3;
+        fp2_t result;
+        result.x[0] = fp_mont::one(or_zero);
+        result.x[1].zero();
+        return result;
     }
 
-    inline bool is_zero(const fp2_t& a) const
+    __device__ bool is_one() const { return x[0].is_one() && x[1].is_zero(); }
+    __device__ fp2_t &cneg(bool flag)
     {
-        auto ret = __ballot(fp_mont::is_zero(a));
-        return ((ret >> (laneid()&~1)) & 3) == 3;
+        x[0].cneg(flag);
+        x[1].cneg(flag);
+        return *this;
     }
-
-    static inline fp2_t one(int or_zero = 0)
-    {   return fp_mont::one((laneid()&1) | or_zero);   }
-
-    inline bool is_one() const
+    friend __device__ fp2_t cneg(fp2_t value, bool flag) { return value.cneg(flag); }
+    friend __device__ fp2_t czero(const fp2_t &value, int set_zero)
     {
-        auto id = laneid();
-        auto even = ~(0 - (id&1));
-        uint32_t is_zero = ((fp_mont)*this)[0] ^ (fp_mont::one()[0] & even);
-
-        for (size_t i = 1; i < n; i++)
-            is_zero |= ((fp_mont)*this)[i] ^ (fp_mont::one()[i] & even);
-
-        is_zero = __ballot(is_zero == 0);
-        return ((is_zero >> (id&~1)) & 3) == 3;
+        fp2_t result = value;
+        if (set_zero) result.zero();
+        return result;
     }
-
-    inline fp2_t reciprocal() const
+    static __device__ fp2_t csel(const fp2_t &a, const fp2_t &b, int select_a)
     {
-        auto a = (fp_mont)*this^2;
-        auto b = shfl_xor(a);
-        a += b;
-        a = ct_inverse_mod_x(a);    // 1/(x[0]^2 + x[1]^2)
-        a *= (fp_mont)*this;
-        a.cneg(threadIdx.x&1);
-        return a;
+        return fp2_t(fp_mont::csel(a.x[0], b.x[0], select_a),
+                     fp_mont::csel(a.x[1], b.x[1], select_a));
     }
-    friend inline fp2_t operator/(int one, const fp2_t& a)
-    {   if (one != 1) asm("trap;"); return a.reciprocal();   }
-    friend inline fp2_t operator/(const fp2_t& a, const fp2_t& b)
-    {   return a * b.reciprocal();   }
-    inline fp2_t& operator/=(const fp2_t& a)
-    {   return *this *= a.reciprocal();   }
+    friend __device__ bool operator==(const fp2_t &a, const fp2_t &b)
+    {
+        return (a.x[0] - b.x[0]).is_zero() &&
+               (a.x[1] - b.x[1]).is_zero();
+    }
+    friend __device__ bool operator!=(const fp2_t &a, const fp2_t &b)
+    { return !(a == b); }
+
+    friend __device__ fp2_t operator+(const fp2_t &a, const fp2_t &b)
+    { return fp2_t(a.x[0] + b.x[0], a.x[1] + b.x[1]); }
+    __device__ fp2_t &operator+=(const fp2_t &other)
+    { x[0] += other.x[0]; x[1] += other.x[1]; return *this; }
+    friend __device__ fp2_t operator-(const fp2_t &a, const fp2_t &b)
+    { return fp2_t(a.x[0] - b.x[0], a.x[1] - b.x[1]); }
+    friend __device__ fp2_t operator-(const fp2_t &value)
+    {
+        fp2_t result = value;
+        result.cneg(true);
+        return result;
+    }
+    __device__ fp2_t &operator-=(const fp2_t &other)
+    { x[0] -= other.x[0]; x[1] -= other.x[1]; return *this; }
+
+    friend __device__ fp2_t operator*(const fp2_t &a, const fp2_t &b)
+    {
+        const fp_mont ac = a.x[0] * b.x[0];
+        const fp_mont bd = a.x[1] * b.x[1];
+        const fp_mont cross = (a.x[0] + a.x[1]) * (b.x[0] + b.x[1]);
+        return fp2_t(ac - bd, cross - ac - bd);
+    }
+    __device__ fp2_t &operator*=(const fp2_t &other)
+    { return *this = *this * other; }
+
+    __device__ fp2_t &sqr()
+    {
+        const fp_mont c0 = (x[0] + x[1]) * (x[0] - x[1]);
+        const fp_mont c1 = (x[0] * x[1]) << 1;
+        x[0] = c0;
+        x[1] = c1;
+        return *this;
+    }
+    __device__ fp2_t &operator^=(int power)
+    {
+        if (power == 2) return sqr();
+        __builtin_trap();
+        return *this;
+    }
+    friend __device__ fp2_t operator^(fp2_t value, int power)
+    { return value ^= power; }
+    friend __device__ fp2_t operator<<(const fp2_t &value, unsigned shift)
+    { return fp2_t(value.x[0] << shift, value.x[1] << shift); }
+    __device__ fp2_t &operator<<=(unsigned shift)
+    { x[0] <<= shift; x[1] <<= shift; return *this; }
+
+    __device__ fp2_t reciprocal() const
+    {
+        const fp_mont inverse = inverse_fp(x[0] * x[0] + x[1] * x[1]);
+        fp_mont negative = x[1];
+        negative.cneg(true);
+        return fp2_t(x[0] * inverse, negative * inverse);
+    }
+    friend __device__ fp2_t operator/(int one, const fp2_t &value)
+    { if (one != 1) __builtin_trap(); return value.reciprocal(); }
+    friend __device__ fp2_t operator/(const fp2_t &a, const fp2_t &b)
+    { return a * b.reciprocal(); }
+    __device__ fp2_t &operator/=(const fp2_t &other)
+    { return *this *= other.reciprocal(); }
 };
 
 } // namespace alt_bn128
-
-# undef inline
-# undef asm
-

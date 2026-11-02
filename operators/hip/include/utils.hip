@@ -1,16 +1,27 @@
 #pragma once
-#include <vector>
 #include <cassert>
+#include <cstdio>
+#include <cstdlib>
 #include <cstdint>
 #include <stdexcept>
+#include <string>
+#include <vector>
+
+#include <hip/hip_runtime.h>
 
 inline size_t ceil_div(size_t a, size_t b) { return (a + b - 1) / b; }
+inline size_t round_up(size_t a, size_t b) { return ceil_div(a, b) * b; }
+inline size_t round_down(size_t a, size_t b) { return a / b * b; }
+inline size_t log2_floor(size_t a) { return 63 - __builtin_clzll(a); }
 
-#define CUDA_CHECK(ans) { gpuAssert((ans), __FILE__, __LINE__); }
-inline void gpuAssert(hipError_t code, const char *file, int line) {
+#define HIP_CHECK(ans) { hip_assert((ans), __FILE__, __LINE__); }
+// Retained for imported Groth16 sources which historically used CUDA_CHECK for
+// both runtimes. New HIP code should use HIP_CHECK.
+#define CUDA_CHECK(ans) HIP_CHECK(ans)
+inline void hip_assert(hipError_t code, const char *file, int line) {
    if (code != hipSuccess) {
       fprintf(stderr, "HIP Error: %s %s %d\n", hipGetErrorString(code), file, line);
-      exit(code);
+      std::abort();
    }
 }
 
@@ -67,8 +78,19 @@ public:
             total_size += r.size;
         }
 
-        hipError_t err = hipMalloc(&base_ptr, total_size);
-        if (err != hipSuccess) throw std::runtime_error("hipMalloc failed");
+        size_t free_bytes = 0, total_bytes = 0;
+        hipError_t err = hipMemGetInfo(&free_bytes, &total_bytes);
+        if (err != hipSuccess)
+            throw std::runtime_error(std::string("hipMemGetInfo failed: ") +
+                                     hipGetErrorString(err));
+        const size_t reserve = 512ULL << 20;
+        if (free_bytes <= reserve || total_size > free_bytes - reserve)
+            throw std::runtime_error(
+                "refusing HIP allocation: less than 512 MiB would remain free");
+        err = hipMalloc(&base_ptr, total_size);
+        if (err != hipSuccess)
+            throw std::runtime_error(std::string("hipMalloc failed: ") +
+                                     hipGetErrorString(err));
 
         char* ptr = reinterpret_cast<char*>(base_ptr);
         size_t offset = 0;

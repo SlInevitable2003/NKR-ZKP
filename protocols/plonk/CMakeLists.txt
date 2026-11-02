@@ -56,4 +56,7 @@ endforeach()
 if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")
     set_target_properties(plonk-gen plonk-setup plonk-prove plonk-verify
         PROPERTIES LINKER_LANGUAGE CUDA)
+elseif(NKR_ZKP_ACCELERATOR STREQUAL "HIP")
+    set_target_properties(plonk-gen plonk-setup plonk-prove plonk-verify
+        PROPERTIES LINKER_LANGUAGE HIP)
 endif()

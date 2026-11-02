@@ -58,4 +58,6 @@ endforeach()
 
 if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")
     set_target_properties(groth16-setup groth16-prove PROPERTIES LINKER_LANGUAGE CUDA)
+elseif(NKR_ZKP_ACCELERATOR STREQUAL "HIP")
+    set_target_properties(groth16-setup groth16-prove PROPERTIES LINKER_LANGUAGE HIP)
 endif()
