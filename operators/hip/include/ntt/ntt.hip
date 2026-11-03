@@ -149,12 +149,13 @@ public:
             <<<scale / final_block_size, final_block_size,
                final_block_size * sizeof(FieldT)>>>(
                 polynomial, buffer, omegas, scale, final_batch_size);
+        constexpr size_t final_kernel_block = 256;
         bit_reverse_copy
-            <<<scale / DCU_NTT_BLOCK_SIZE, DCU_NTT_BLOCK_SIZE>>>(
+            <<<ceil_div(scale, final_kernel_block), final_kernel_block>>>(
                 buffer, polynomial, rounds, scale);
         if (inverse)
             multiply_constant_kernel
-                <<<scale / DCU_NTT_BLOCK_SIZE, DCU_NTT_BLOCK_SIZE>>>(
+                <<<ceil_div(scale, final_kernel_block), final_kernel_block>>>(
                     polynomial, scale_inverse, scale);
         HIP_CHECK(hipDeviceSynchronize());
         HIP_CHECK(hipGetLastError());

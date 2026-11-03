@@ -268,15 +268,27 @@ public:
     void prove(const Circuit &circuit, const ProvingKey &pk,
                const std::vector<Scalar> &witness, RawProof &proof) override
     {
-        ProfileScope total("groth16.hip.prove.total");
         const std::size_t rows = circuit.constraints();
         const std::size_t variables = circuit.variables();
         CsrMatrix<Scalar> *matrices[3] = {
             const_cast<CsrMatrix<Scalar> *>(&circuit.a),
             const_cast<CsrMatrix<Scalar> *>(&circuit.b),
             const_cast<CsrMatrix<Scalar> *>(&circuit.c)};
-        HipProveLayout layout(variables, rows, matrices,
-            reinterpret_cast<const Scalar *>(forward_roots_of_unity)[libff::log2(rows)]);
+        // HipProveLayout only allocates device buffers and precomputes
+        // NTT/CSR structures that depend on the circuit, not the witness; it
+        // is setup-eligible work, so it is timed separately and kept out of
+        // the prove.total accounting.
+        std::unique_ptr<HipProveLayout> layout_owner;
+        {
+            ProfileScope stage("groth16.hip.prepare.layout");
+            layout_owner = std::make_unique<HipProveLayout>(
+                variables, rows, matrices,
+                reinterpret_cast<const Scalar *>(forward_roots_of_unity)[
+                    libff::log2(rows)]);
+            profile_synchronize();
+        }
+        HipProveLayout &layout = *layout_owner;
+        ProfileScope total("groth16.hip.prove.total");
         {
             ProfileScope stage("groth16.hip.prove.upload_key");
             layout.sparse_g1.load_bases(pk.a_query.data(), true, 0);

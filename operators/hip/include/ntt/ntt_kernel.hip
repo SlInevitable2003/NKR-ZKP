@@ -34,7 +34,8 @@ __global__ void radix2_ntt_stage(
 // same decomposition and indexing, but exchanges every level through LDS so
 // the implementation has no dependency on wavefront-local shuffle semantics.
 template <typename FieldT>
-__global__ void dcu_onchip_butterfly_transformation_1(
+__global__ __launch_bounds__(DCU_NTT_BLOCK_SIZE)
+void dcu_onchip_butterfly_transformation_1(
     const FieldT *input, FieldT *output, const FieldT *omegas, size_t count)
 {
     uint32_t round = 0;
@@ -63,7 +64,8 @@ __global__ void dcu_onchip_butterfly_transformation_1(
 }
 
 template <typename FieldT>
-__global__ void dcu_onchip_butterfly_transformation_2(
+__global__ __launch_bounds__(DCU_NTT_BLOCK_SIZE)
+void dcu_onchip_butterfly_transformation_2(
     const FieldT *input, FieldT *output, const FieldT *omegas, size_t count)
 {
     uint32_t round = 10;
@@ -93,7 +95,8 @@ __global__ void dcu_onchip_butterfly_transformation_2(
 }
 
 template <typename FieldT>
-__global__ void dcu_onchip_butterfly_transformation_3(
+__global__ __launch_bounds__(DCU_NTT_BLOCK_SIZE)
+void dcu_onchip_butterfly_transformation_3(
     const FieldT *input, FieldT *output, const FieldT *omegas,
     size_t count, size_t batch_size)
 {
