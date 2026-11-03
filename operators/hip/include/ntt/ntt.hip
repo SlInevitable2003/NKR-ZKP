@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 
 #include "fields/alt_bn128-fp2.hip"
@@ -104,26 +105,57 @@ public:
 
     void ntt(FieldT *polynomial, bool inverse = false)
     {
-        constexpr size_t block = 256;
         const uint32_t rounds = static_cast<uint32_t>(log2_floor(scale));
         FieldT *omegas = inverse ? inverse_omega_power_table : omega_power_table;
-        bit_reverse_copy<<<ceil_div(scale, block), block>>>(
-            polynomial, buffer, rounds, scale);
-        FieldT *source = buffer;
-        FieldT *destination = polynomial;
-        for (size_t span = 2; span <= scale; span <<= 1) {
-            radix2_ntt_stage<<<ceil_div(scale / 2, block), block>>>(
-                source, destination, omegas, scale, span);
-            FieldT *temporary = source;
-            source = destination;
-            destination = temporary;
+
+        if (scale < (size_t{1} << 20)) {
+            constexpr size_t block = 256;
+            bit_reverse_copy<<<ceil_div(scale, block), block>>>(
+                polynomial, buffer, rounds, scale);
+            FieldT *source = buffer;
+            FieldT *destination = polynomial;
+            for (size_t span = 2; span <= scale; span <<= 1) {
+                radix2_ntt_stage<<<ceil_div(scale / 2, block), block>>>(
+                    source, destination, omegas, scale, span);
+                FieldT *temporary = source;
+                source = destination;
+                destination = temporary;
+            }
+            if (source != polynomial)
+                HIP_CHECK(hipMemcpy(polynomial, source, scale * sizeof(FieldT),
+                                    hipMemcpyDeviceToDevice));
+            if (inverse)
+                multiply_constant_kernel<<<ceil_div(scale, block), block>>>(
+                    polynomial, scale_inverse, scale);
+            HIP_CHECK(hipDeviceSynchronize());
+            HIP_CHECK(hipGetLastError());
+            return;
         }
-        if (source != polynomial)
-            HIP_CHECK(hipMemcpy(polynomial, source, scale * sizeof(FieldT),
-                                hipMemcpyDeviceToDevice));
+
+        const size_t final_batch_size =
+            scale / (DCU_NTT_BLOCK_SIZE * DCU_NTT_BLOCK_SIZE);
+        const size_t final_block_size =
+            std::max(final_batch_size, size_t{32});
+        assert(final_block_size <= 1024 &&
+               "on-chip NTT requires at most 1024 threads per block");
+
+        dcu_onchip_butterfly_transformation_1
+            <<<scale / DCU_NTT_BLOCK_SIZE, DCU_NTT_BLOCK_SIZE>>>(
+                polynomial, buffer, omegas, scale);
+        dcu_onchip_butterfly_transformation_2
+            <<<scale / DCU_NTT_BLOCK_SIZE, DCU_NTT_BLOCK_SIZE>>>(
+                buffer, polynomial, omegas, scale);
+        dcu_onchip_butterfly_transformation_3
+            <<<scale / final_block_size, final_block_size,
+               final_block_size * sizeof(FieldT)>>>(
+                polynomial, buffer, omegas, scale, final_batch_size);
+        bit_reverse_copy
+            <<<scale / DCU_NTT_BLOCK_SIZE, DCU_NTT_BLOCK_SIZE>>>(
+                buffer, polynomial, rounds, scale);
         if (inverse)
-            multiply_constant_kernel<<<ceil_div(scale, block), block>>>(
-                polynomial, scale_inverse, scale);
+            multiply_constant_kernel
+                <<<scale / DCU_NTT_BLOCK_SIZE, DCU_NTT_BLOCK_SIZE>>>(
+                    polynomial, scale_inverse, scale);
         HIP_CHECK(hipDeviceSynchronize());
         HIP_CHECK(hipGetLastError());
     }
