@@ -99,7 +99,7 @@ public:
         p1inf = p1.is_inf();
         add.H = p1.Z^2;         /* Z1^2 */
 
-        if (a4 != nullptr) {
+        if constexpr (a4 != nullptr) {
             p3.Y = add.H^2;     /* Z1^4, [borrow p3.Y] */
             p3.Y *= *a4;
             dbl.R += p3.Y;      /* R = 3*X1^2+a*Z1^4 */
@@ -180,7 +180,7 @@ public:
         dbl.sx = p2.X + p2.X;   /* sx = X2+X2 */
         dbl.R = p2.X^2;         /* X2^2 */
         dbl.R += dbl.R + dbl.R; /* R = 3*X2^2 */
-        if (a4 != nullptr)
+        if constexpr (a4 != nullptr)
             dbl.R += *a4;
         dbl.H = p2.Y + p2.Y;    /* H = 2*Y2 */
 

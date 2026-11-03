@@ -42,8 +42,9 @@ public:
     __device__ void zero() { x[0].zero(); x[1].zero(); }
     __device__ void to() { x[0].to(); x[1].to(); }
     __device__ void from() { x[0].from(); x[1].from(); }
-    __device__ bool is_zero() const { return x[0].is_zero() && x[1].is_zero(); }
-    __device__ bool is_zero(const fp2_t &value) const
+    __host__ __device__ bool is_zero() const
+    { return x[0].is_zero() && x[1].is_zero(); }
+    __host__ __device__ bool is_zero(const fp2_t &value) const
     { return is_zero() && value.is_zero(); }
 
     static __device__ fp2_t one(int or_zero = 0)

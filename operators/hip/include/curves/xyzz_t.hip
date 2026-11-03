@@ -175,7 +175,7 @@ public:
             S = p31.X * V;          /* S = X1*V */
             M = p31.X^2;
             M = M + M + M;          /* M = 3*X1^2[+a*ZZ1^2] */
-            if (a4 != nullptr) {
+            if constexpr (a4 != nullptr) {
 #if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
                 U = *a4;
                 U *= p31.ZZ^2;
@@ -246,7 +246,7 @@ public:
                 inf = A.is_zero();      /* X1==X2, not add |p1| and |p2| */
                 dbl = R.is_zero() & inf;
                 if (dbl) {              /* X1==X2 && Y1==Y2, double |p2| */
-                    if (a4 != nullptr) {
+                    if constexpr (a4 != nullptr) {
                         A = p2.ZZ;
                         pc = 16;
                     } else {
@@ -311,7 +311,7 @@ public:
 #define S PP
             case 14:
                 A = A + A + A;          /* M = 3*X1^2[+a*ZZ1^2] */
-                if (a4 != nullptr)
+                if constexpr (a4 != nullptr)
                     A += U;
                 B = A;
                 break;
@@ -326,11 +326,11 @@ public:
 #undef S
             /*** account for a4 != nullptr when doubling ***/
             case 17:                    /* ZZ1^2 */
-                if (a4 != nullptr)
+                if constexpr (a4 != nullptr)
                     B = *a4;
                 break;
             case 18:                    /* ZZ1^2*a4 */
-                if (a4 != nullptr) {
+                if constexpr (a4 != nullptr) {
                     U = A;
                     A = p2.Y<<1;        /* U = 2*Y1 */
                     B = A;
@@ -407,7 +407,7 @@ public:
                 S = p2.X * p31.ZZ;      /* S = X1*V */
                 M = p2.X^2;
                 M = M + M + M;          /* M = 3*X1^2[+a] */
-                if (a4 != nullptr) {
+                if constexpr (a4 != nullptr) {
 #if defined(__CUDA_ARCH__) || defined(__HIP_DEVICE_COMPILE__)
                     M += (U = *a4);
 #else
@@ -607,7 +607,7 @@ public:
 #define S R
             case 10:                    /* X1^2 */
                 A += A<<1;              /* M = 3*X1^2[+a] */
-                if (a4 != nullptr)
+                if constexpr (a4 != nullptr)
                     A += (B = *a4);
                 B = A;
                 break;
