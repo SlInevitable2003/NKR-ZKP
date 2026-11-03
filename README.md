@@ -32,7 +32,6 @@ CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各
 
 - Groth16 已有可用的 CPU、CUDA 和 HIP 后端。CPU 后端始终参与构建；配置时可以选择 CUDA 或 HIP 加速后端。
 - PLONK 已实现独立的三线 Plonkish 算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、CUDA Prove 和面向 DCU 的 HIP Prove；电路、见证、SRS、PK/VK 与证明均通过共享 `BinaryArchive` 读写。CUDA/HIP Setup 复用 CPU Setup。
-- 原有的 Rust PLONK CPU/CUDA 代码已删除。新实现计划以 `docs/plonk_protocol_low_level.pdf` 描述的 BN254、KZG 方案为准。
 - Winterfell 仍作为独立的 Rust 实现保留，支持在 CPU、NVIDIA GPU 和 DCU 平台环境中构建与运行。
 
 ## Groth16 构建与运行
@@ -46,13 +45,9 @@ build/groth16/bin/groth16-prove
 build/groth16/bin/groth16-verify
 ```
 
-不存在 `groth16-prove-cpu`、`groth16-prove-cuda` 或 `groth16-prove-hip` 之类的独立程序。`make groth16-cpu`、`make groth16-cuda` 和 `make groth16-hip` 只是决定把哪些后端实现编入上述统一程序；运行 `setup` 和 `prove` 时，再通过 `--backend` 选择实际使用的后端。
-
 - CPU 配置支持 `--backend cpu`。
 - CUDA 配置同时支持 `--backend cpu` 和 `--backend cuda`。
 - HIP 配置同时支持 `--backend cpu` 和 `--backend hip`；`dcu` 是 `hip` 的兼容性名称。
-
-由于 CUDA 和 HIP 使用不同的平台工具链，一个构建目录只选择其中一种加速器。切换构建配置前执行 `make groth16-clean`，重新生成的仍然是上面同名、同接口的四个程序。
 
 以下示例均在仓库根目录执行，并以规模为 100 的矩阵乘法电路为例。
 
@@ -103,8 +98,6 @@ G16=build/groth16/bin
 
 Groth16 与 PLONK 使用相同的证明计时分层：`*.prove.program_total` 是包含文件读写、校验和 prepare 的程序端到端时间；`*.prove.prepare_backend` 单独包含设备布局、NTT 幂表等与 witness 无关的预计算以及 PK 上传；`*.prove.total` 只是在线证明生成时间。Groth16 的该项包括 raw proof 和最终盲化，但不包括 prepare 与证明写盘。CUDA 和 HIP 后端在这三层上保持相同的封装。
 
-Groth16 的 `matmul s` 在填充前有 `s²(s+1)` 条约束。`s=80` 时为 518,400，仍填充到 `2^19`；`s=81` 时为 538,002，是首个填充到 `2^20` 的规模。因此 `matmul 81` 适合临界规模测试，文档仍使用 `matmul 100` 作为留有余量的 Groth16 大规模示例；`matmul 79` 只有 499,280 条原始约束，不会进入 `2^20` 域。
-
 如果只需要一条命令完成构建和端到端运行，可使用：
 
 ```bash
@@ -148,10 +141,10 @@ PLONK_BIN=build/plonk/bin
 
 ### 使用 NVIDIA CUDA 后端
 
-CUDA 配置仍生成同名的四个程序，不会生成后端专属可执行文件。`CUDA_ARCH` 是目标 GPU 的计算能力；RTX 5060 使用 `120`。完整命令如下：
+CUDA 配置仍生成同名的四个程序，不会生成后端专属可执行文件。完整命令如下：
 
 ```bash
-make plonk-cuda CUDA_ARCH=120
+make plonk-cuda CUDA_ARCH=80
 PLONK_BIN=build/plonk/bin
 
 "$PLONK_BIN/plonk-gen" --profile matmul 79
@@ -211,7 +204,7 @@ make plonk-test-cpu-setup
 make plonk-test-cpu-prove-verify
 ```
 
-自动生成的 SRS 仅用于本地开发和功能测试，不是可用于生产环境的多方可信设置。更详细的算术化、Transcript、文件格式和 CPU 协议实现说明见 [protocols/plonk/README.md](protocols/plonk/README.md)。
+更详细的算术化、Transcript、文件格式和 CPU 协议实现说明见 [protocols/plonk/README.md](protocols/plonk/README.md)。
 
 ## zk-STARK / Winterfell 构建与运行
 
@@ -259,10 +252,7 @@ RAYON_NUM_THREADS=8 \
 `--field_extension` 与 `--folding` 调整证明参数；这些参数会影响证明时间、
 证明大小和安全级别。
 
-需要注意，当前 Winterfell 是未经审计的研究实现，不能用于生产环境；上游还
-明确说明当前证明不具备完美零知识，因此在必须隐藏秘密见证的场景中不能仅凭
-“zk-STARK”名称假定其满足隐私要求。更详细的组件和命令说明见
-[protocols/stark/README.md](protocols/stark/README.md)。
+更详细的组件和命令说明见[protocols/stark/README.md](protocols/stark/README.md)。
 
 ## 分层规则
 
