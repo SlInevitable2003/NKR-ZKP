@@ -97,6 +97,8 @@ public:
 };
 
 class CudaBackend final : public Backend {
+    std::unique_ptr<CudaProveLayout> prepared_layout;
+
 public:
     const char *name() const override { return "cuda"; }
 
@@ -209,28 +211,40 @@ public:
         vk.gamma_g2 = gamma * G2::one(); vk.delta_g2 = pk.delta_g2;
     }
 
-    void prove(const Circuit &circuit, const ProvingKey &pk,
-               const std::vector<Scalar> &witness, RawProof &proof) override
+    void prepare(const Circuit &circuit, const ProvingKey &pk) override
     {
-        ProfileScope total("groth16.cuda.prove.total");
+        ProfileScope total("groth16.cuda.prepare.total");
         const std::size_t rows = circuit.constraints();
         const std::size_t variables = circuit.variables();
-        const std::size_t exponent = libff::log2(rows);
         CsrMatrix<Scalar> *matrices[3] = {
             const_cast<CsrMatrix<Scalar> *>(&circuit.a),
             const_cast<CsrMatrix<Scalar> *>(&circuit.b),
             const_cast<CsrMatrix<Scalar> *>(&circuit.c)};
-        CudaProveLayout layout(variables, rows, matrices,
-            reinterpret_cast<const Scalar *>(forward_roots_of_unity)[exponent]);
         {
-            ProfileScope stage("groth16.cuda.prove.upload_key");
-            layout.a_msm.load_bases(pk.a_query.data());
-            layout.b_g1_msm.load_bases(pk.b_g1_query.data());
-            layout.l_msm.load_bases(pk.l_query.data());
-            layout.h_msm.load_bases(pk.h_query.data());
-            layout.b_g2_msm.load_bases(pk.b_g2_query.data());
+            ProfileScope stage("groth16.cuda.prepare.initialize_layout");
+            prepared_layout = std::make_unique<CudaProveLayout>(
+                variables, rows, matrices,
+                reinterpret_cast<const Scalar *>(forward_roots_of_unity)[
+                    libff::log2(rows)]);
             profile_synchronize();
         }
+        {
+            ProfileScope stage("groth16.cuda.prepare.upload_key");
+            prepared_layout->a_msm.load_bases(pk.a_query.data());
+            prepared_layout->b_g1_msm.load_bases(pk.b_g1_query.data());
+            prepared_layout->l_msm.load_bases(pk.l_query.data());
+            prepared_layout->h_msm.load_bases(pk.h_query.data());
+            prepared_layout->b_g2_msm.load_bases(pk.b_g2_query.data());
+            profile_synchronize();
+        }
+    }
+
+    void prove(const Circuit &circuit, const ProvingKey &pk,
+               const std::vector<Scalar> &witness, RawProof &proof) override
+    {
+        if (!prepared_layout) prepare(circuit, pk);
+        ProfileScope total("groth16.cuda.prove.total");
+        CudaProveLayout &layout = *prepared_layout;
         {
             ProfileScope stage("groth16.cuda.prove.r1cs_matrix_vector");
             layout.witness_buckets.load_scalars(witness.data());

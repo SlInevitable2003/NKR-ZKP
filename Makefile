@@ -17,6 +17,7 @@ CUDA_HOME ?= /usr/local/cuda
 GROTH16_CPU_MATRIX_SIZE ?= 4
 GROTH16_CUDA_MATRIX_SIZE ?= 12
 GROTH16_HIP_MATRIX_SIZE ?= 12
+PLONK_CPU_MATRIX_SIZE ?= 2
 PLONK_CUDA_MATRIX_SIZE ?= 10
 PLONK_HIP_MATRIX_SIZE ?= 10
 LIGHTZK_DEPS_DIR ?= $(CURDIR)/third_party/lightzk/depends
@@ -45,7 +46,7 @@ help:
 	@echo "  plonk-test-cpu-setup  build and test PLONK CPU Setup"
 	@echo "  plonk-test-cpu-prove-verify  build and test PLONK CPU Prove/Verify"
 	@echo "  plonk-clean   remove the PLONK CMake build tree"
-	@echo "  stark          build Winterfell with concurrent CPU support"
+	@echo "  stark          build Winterfell with concurrent support"
 	@echo "  stark-matmul   run the Winterfell matrix multiplication example"
 
 check:
@@ -151,10 +152,10 @@ plonk-dcu: plonk-hip
 plonk-scaffold: plonk-cpu
 
 plonk-test-cpu: plonk-cpu
-	$(PLONK_BIN_DIR)/plonk-gen matmul 2
-	$(PLONK_BIN_DIR)/plonk-setup --backend cpu matmul_2.bin
-	$(PLONK_BIN_DIR)/plonk-prove --backend cpu matmul_2.bin
-	$(PLONK_BIN_DIR)/plonk-verify matmul_2.bin
+	$(PLONK_BIN_DIR)/plonk-gen $(PROFILE_FLAG) matmul $(PLONK_CPU_MATRIX_SIZE)
+	$(PLONK_BIN_DIR)/plonk-setup $(PROFILE_FLAG) --backend cpu matmul_$(PLONK_CPU_MATRIX_SIZE).bin
+	$(PLONK_BIN_DIR)/plonk-prove $(PROFILE_FLAG) --backend cpu matmul_$(PLONK_CPU_MATRIX_SIZE).bin
+	$(PLONK_BIN_DIR)/plonk-verify $(PROFILE_FLAG) matmul_$(PLONK_CPU_MATRIX_SIZE).bin
 
 plonk-test-cuda: plonk-cuda
 	cmake --build $(PLONK_BUILD_DIR) --parallel $(JOBS) \

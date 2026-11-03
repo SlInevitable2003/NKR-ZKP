@@ -88,16 +88,16 @@ make plonk-cpu
 
 PLONK_BIN=build/plonk/bin
 
-"$PLONK_BIN/plonk-gen" matmul 2
-"$PLONK_BIN/plonk-setup" --backend cpu matmul_2.bin
-"$PLONK_BIN/plonk-prove" --backend cpu matmul_2.bin
-"$PLONK_BIN/plonk-verify" matmul_2.bin
+"$PLONK_BIN/plonk-gen" --profile matmul 79
+"$PLONK_BIN/plonk-setup" --profile --backend cpu matmul_79.bin
+"$PLONK_BIN/plonk-prove" --profile --backend cpu matmul_79.bin
+"$PLONK_BIN/plonk-verify" --profile matmul_79.bin
 
-"$PLONK_BIN/plonk-gen" fibonacci 10
-"$PLONK_BIN/plonk-setup" --backend cpu \
-  --srs matmul_2.srs.bin fibonacci_10.bin
-"$PLONK_BIN/plonk-prove" --backend cpu fibonacci_10.bin
-"$PLONK_BIN/plonk-verify" fibonacci_10.bin
+"$PLONK_BIN/plonk-gen" --profile fibonacci 10
+"$PLONK_BIN/plonk-setup" --profile --backend cpu \
+  --srs matmul_79.srs.bin fibonacci_10.bin
+"$PLONK_BIN/plonk-prove" --profile --backend cpu fibonacci_10.bin
+"$PLONK_BIN/plonk-verify" --profile fibonacci_10.bin
 ```
 
 CUDA 的完整构建与运行命令如下；RTX 5060 的计算能力为 `120`：
@@ -106,16 +106,16 @@ CUDA 的完整构建与运行命令如下；RTX 5060 的计算能力为 `120`：
 make plonk-cuda CUDA_ARCH=120
 
 PLONK_BIN=build/plonk/bin
-"$PLONK_BIN/plonk-gen" matmul 10
-"$PLONK_BIN/plonk-setup" --backend cuda matmul_10.bin
-"$PLONK_BIN/plonk-prove" --backend cuda matmul_10.bin
-"$PLONK_BIN/plonk-verify" matmul_10.bin
+"$PLONK_BIN/plonk-gen" --profile matmul 79
+"$PLONK_BIN/plonk-setup" --profile --backend cuda matmul_79.bin
+"$PLONK_BIN/plonk-prove" --profile --backend cuda matmul_79.bin
+"$PLONK_BIN/plonk-verify" --profile matmul_79.bin
 ```
 
 包含共享算子对照测试和端到端证明验证的快速回归命令为：
 
 ```bash
-make plonk-test-cuda CUDA_ARCH=120 PLONK_CUDA_MATRIX_SIZE=10
+make plonk-test-cuda PROFILE=1 CUDA_ARCH=120 PLONK_CUDA_MATRIX_SIZE=79
 ```
 
 HIP/DCU 使用同一套流程，Setup 复用 CPU 后端，Prove 使用普通 kernel、全局 scan 和共享内存归约，不依赖 warp vote/shuffle 或 cooperative groups：
@@ -124,12 +124,12 @@ HIP/DCU 使用同一套流程，Setup 复用 CPU 后端，Prove 使用普通 ker
 make plonk-hip HIP_ARCH=<gfx-arch>
 
 PLONK_BIN=build/plonk/bin
-"$PLONK_BIN/plonk-gen" matmul 10
-"$PLONK_BIN/plonk-setup" --backend hip matmul_10.bin
-"$PLONK_BIN/plonk-prove" --backend hip matmul_10.bin
-"$PLONK_BIN/plonk-verify" matmul_10.bin
+"$PLONK_BIN/plonk-gen" --profile matmul 79
+"$PLONK_BIN/plonk-setup" --profile --backend hip matmul_79.bin
+"$PLONK_BIN/plonk-prove" --profile --backend hip matmul_79.bin
+"$PLONK_BIN/plonk-verify" --profile matmul_79.bin
 
-make plonk-test-hip HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=10
+make plonk-test-hip PROFILE=1 HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=79
 ```
 
-上述命令使用独立的 `build/plonk` 构建树，默认产物目录为 `build/plonk/data`。与 Groth16 相同，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖该目录；使用默认值时无需传入。自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。CPU 快速回归可执行 `make plonk-test-cpu`。
+上述命令使用独立的 `build/plonk` 构建树，默认产物目录为 `build/plonk/data`。与 Groth16 相同，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖该目录；使用默认值时无需传入。自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。带 profile 的 CPU 回归可执行 `make plonk-test-cpu PROFILE=1 PLONK_CPU_MATRIX_SIZE=79`。

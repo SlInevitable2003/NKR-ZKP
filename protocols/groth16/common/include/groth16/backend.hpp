@@ -18,6 +18,8 @@ public:
         ProvingKey &proving_key,
         VerificationKey &verification_key) = 0;
 
+    virtual void prepare(const Circuit &, const ProvingKey &) {}
+
     virtual void prove(
         const Circuit &circuit,
         const ProvingKey &proving_key,

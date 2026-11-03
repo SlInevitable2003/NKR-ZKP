@@ -55,7 +55,7 @@ protocols/<protocol>/
 
 源码根目录下不保留空的占位目录。新层级应在第一份实际源码或头文件加入时创建；迁移代码后，也应一并删除已经失去内容的旧层级。`scripts/check-layout.sh` 会检查 `common`、`operators` 和 `protocols` 下的空目录，避免本地重构残留被误认为稳定接口。
 
-Groth16 是外部 `gen/setup/prove/verify` 组织方式的可用参考，但其当前较粗粒度的 `Backend::setup/prove` 接口不构成 PLONK 内部实现的限制。PLONK 可以采用按轮次组织的会话，在公共层控制 Transcript 顺序的同时，让多项式常驻 GPU。
+Groth16 和 PLONK 的证明后端都采用 `prepare/prove` 生命周期：prepare 承载与单次 witness 无关的布局初始化、预计算和密钥上传，prove 只承载在线证明数据流。PLONK 的内部仍按轮次组织，在公共层控制 Transcript 顺序的同时让多项式常驻设备内存。
 
 ## PLONK 范围
 

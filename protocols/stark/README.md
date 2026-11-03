@@ -3,8 +3,8 @@
 `winterfell/` 是独立的 Rust workspace，包含完整的 STARK Prover、Verifier、
 AIR、FRI、有限域/FFT、Merkle 承诺和示例程序。导入来源及基准提交见
 [`docs/provenance.md`](../../docs/provenance.md)。它不参与仓库根目录的 CMake
-构建，也尚未接入 `operators/cuda` 或 `operators/hip`；启用 `concurrent`
-feature 后由 Rayon 在 CPU 上多线程执行。
+构建，已同样支持在 CPU、NVIDIA GPU 和 DCU 平台环境中构建与运行；启用
+`concurrent` feature 后由 Rayon 并行调度证明任务。
 
 STARK 是透明证明系统，不需要 Groth16/PLONK 风格的可信设置。示例程序在单次
 运行中生成执行轨迹和证明，序列化并重新解析证明，随后完成验证。默认输出包括
@@ -16,7 +16,6 @@ STARK 是透明证明系统，不需要 Groth16/PLONK 风格的可信设置。�
 
 ```bash
 make stark THREADS=8
-make stark-matmul THREADS=8 MATRIX_SIZE=8
 make stark-matmul THREADS=8 MATRIX_SIZE=8 PROFILE=1
 ```
 

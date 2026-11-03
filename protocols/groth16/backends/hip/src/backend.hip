@@ -103,6 +103,8 @@ public:
 };
 
 class HipBackend final : public Backend {
+    std::unique_ptr<HipProveLayout> prepared_layout;
+
 public:
     const char *name() const override { return "hip"; }
 
@@ -265,39 +267,40 @@ public:
         vk.delta_g2 = pk.delta_g2;
     }
 
-    void prove(const Circuit &circuit, const ProvingKey &pk,
-               const std::vector<Scalar> &witness, RawProof &proof) override
+    void prepare(const Circuit &circuit, const ProvingKey &pk) override
     {
+        ProfileScope total("groth16.hip.prepare.total");
         const std::size_t rows = circuit.constraints();
         const std::size_t variables = circuit.variables();
         CsrMatrix<Scalar> *matrices[3] = {
             const_cast<CsrMatrix<Scalar> *>(&circuit.a),
             const_cast<CsrMatrix<Scalar> *>(&circuit.b),
             const_cast<CsrMatrix<Scalar> *>(&circuit.c)};
-        // HipProveLayout only allocates device buffers and precomputes
-        // NTT/CSR structures that depend on the circuit, not the witness; it
-        // is setup-eligible work, so it is timed separately and kept out of
-        // the prove.total accounting.
-        std::unique_ptr<HipProveLayout> layout_owner;
         {
-            ProfileScope stage("groth16.hip.prepare.layout");
-            layout_owner = std::make_unique<HipProveLayout>(
+            ProfileScope stage("groth16.hip.prepare.initialize_layout");
+            prepared_layout = std::make_unique<HipProveLayout>(
                 variables, rows, matrices,
                 reinterpret_cast<const Scalar *>(forward_roots_of_unity)[
                     libff::log2(rows)]);
             profile_synchronize();
         }
-        HipProveLayout &layout = *layout_owner;
-        ProfileScope total("groth16.hip.prove.total");
         {
-            ProfileScope stage("groth16.hip.prove.upload_key");
-            layout.sparse_g1.load_bases(pk.a_query.data(), true, 0);
-            layout.sparse_g1.load_bases(pk.b_g1_query.data(), true, 1);
-            layout.sparse_g1.load_bases(pk.l_query.data(), true, 2);
-            layout.dense_g1.load_bases(pk.h_query.data());
-            layout.sparse_g2.load_bases(pk.b_g2_query.data());
+            ProfileScope stage("groth16.hip.prepare.upload_key");
+            prepared_layout->sparse_g1.load_bases(pk.a_query.data(), true, 0);
+            prepared_layout->sparse_g1.load_bases(pk.b_g1_query.data(), true, 1);
+            prepared_layout->sparse_g1.load_bases(pk.l_query.data(), true, 2);
+            prepared_layout->dense_g1.load_bases(pk.h_query.data());
+            prepared_layout->sparse_g2.load_bases(pk.b_g2_query.data());
             profile_synchronize();
         }
+    }
+
+    void prove(const Circuit &circuit, const ProvingKey &pk,
+               const std::vector<Scalar> &witness, RawProof &proof) override
+    {
+        if (!prepared_layout) prepare(circuit, pk);
+        ProfileScope total("groth16.hip.prove.total");
+        HipProveLayout &layout = *prepared_layout;
         {
             ProfileScope stage("groth16.hip.prove.r1cs_matrix_vector");
             layout.witness_buckets.load_scalars(witness.data());

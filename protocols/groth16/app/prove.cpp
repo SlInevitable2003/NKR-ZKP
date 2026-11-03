@@ -42,7 +42,7 @@ int main(int argc, char **argv)
     Curve::init_public_params();
 
     try {
-        ProfileScope total("groth16.prove.total");
+        ProfileScope program_total("groth16.prove.program_total");
         const auto paths = artifact_paths(directory, filename);
         Circuit circuit;
         std::vector<Scalar> witness;
@@ -65,15 +65,22 @@ int main(int argc, char **argv)
         }
         auto backend = make_backend(backend_name);
         std::cout << "Groth16 prove backend: " << backend->name() << '\n';
-        RawProof raw;
         {
-            ProfileScope stage("groth16.prove.backend");
-            backend->prove(circuit, proving_key, witness, raw);
+            ProfileScope stage("groth16.prove.prepare_backend");
+            backend->prepare(circuit, proving_key);
         }
+        RawProof raw;
         Proof proof;
         {
-            ProfileScope stage("groth16.prove.blind_proof");
-            proof = blind_proof(proving_key, raw);
+            ProfileScope total("groth16.prove.total");
+            {
+                ProfileScope stage("groth16.prove.backend");
+                backend->prove(circuit, proving_key, witness, raw);
+            }
+            {
+                ProfileScope stage("groth16.prove.blind_proof");
+                proof = blind_proof(proving_key, raw);
+            }
         }
         {
             ProfileScope stage("groth16.prove.write_proof");

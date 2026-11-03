@@ -33,7 +33,7 @@ CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各
 - Groth16 已有可用的 CPU、CUDA 和 HIP 后端。CPU 后端始终参与构建；配置时可以选择 CUDA 或 HIP 加速后端。
 - PLONK 已实现独立的三线 Plonkish 算术化 Manager、SHA3-256 Transcript、CPU Setup/Prove/Verify、CUDA Prove 和面向 DCU 的 HIP Prove；电路、见证、SRS、PK/VK 与证明均通过共享 `BinaryArchive` 读写。CUDA/HIP Setup 复用 CPU Setup。
 - 原有的 Rust PLONK CPU/CUDA 代码已删除。新实现计划以 `docs/plonk_protocol_low_level.pdf` 描述的 BN254、KZG 方案为准。
-- Winterfell 仍作为独立的 Rust CPU 实现保留。
+- Winterfell 仍作为独立的 Rust 实现保留，支持在 CPU、NVIDIA GPU 和 DCU 平台环境中构建与运行。
 
 ## Groth16 构建与运行
 
@@ -63,10 +63,10 @@ make groth16-clean
 make groth16-cpu
 
 G16=build/groth16/bin
-"$G16/groth16-gen" matmul 100
-"$G16/groth16-setup" --backend cpu matmul_100.bin
-"$G16/groth16-prove" --backend cpu matmul_100.bin
-"$G16/groth16-verify" matmul_100.bin
+"$G16/groth16-gen" --profile matmul 100
+"$G16/groth16-setup" --profile --backend cpu matmul_100.bin
+"$G16/groth16-prove" --profile --backend cpu matmul_100.bin
+"$G16/groth16-verify" --profile matmul_100.bin
 ```
 
 ### 使用 NVIDIA CUDA 后端
@@ -78,10 +78,10 @@ make groth16-clean
 make groth16-cuda CUDA_ARCH=80
 
 G16=build/groth16/bin
-"$G16/groth16-gen" matmul 100
-"$G16/groth16-setup" --backend cuda matmul_100.bin
-"$G16/groth16-prove" --backend cuda matmul_100.bin
-"$G16/groth16-verify" matmul_100.bin
+"$G16/groth16-gen" --profile matmul 100
+"$G16/groth16-setup" --profile --backend cuda matmul_100.bin
+"$G16/groth16-prove" --profile --backend cuda matmul_100.bin
+"$G16/groth16-verify" --profile matmul_100.bin
 ```
 
 ### 使用 HIP/ROCm 后端
@@ -93,20 +93,24 @@ make groth16-clean
 make groth16-hip HIP_ARCH=<gfx-arch>
 
 G16=build/groth16/bin
-"$G16/groth16-gen" matmul 100
-"$G16/groth16-setup" --backend hip matmul_100.bin
-"$G16/groth16-prove" --backend hip matmul_100.bin
-"$G16/groth16-verify" matmul_100.bin
+"$G16/groth16-gen" --profile matmul 100
+"$G16/groth16-setup" --profile --backend hip matmul_100.bin
+"$G16/groth16-prove" --profile --backend hip matmul_100.bin
+"$G16/groth16-verify" --profile matmul_100.bin
 ```
 
-`gen` 和 `verify` 是后端无关的公共程序，不接收 `--backend`。电路、见证、密钥和证明文件默认存放在 `build/groth16/data`。可为任意命令添加 `--profile` 以输出支持的阶段耗时。
+`gen` 和 `verify` 是后端无关的公共程序，不接收 `--backend`。电路、见证、密钥和证明文件默认存放在 `build/groth16/data`。上述命令默认展示 `--profile`，删去该选项即可关闭阶段耗时输出。
+
+Groth16 与 PLONK 使用相同的证明计时分层：`*.prove.program_total` 是包含文件读写、校验和 prepare 的程序端到端时间；`*.prove.prepare_backend` 单独包含设备布局、NTT 幂表等与 witness 无关的预计算以及 PK 上传；`*.prove.total` 只是在线证明生成时间。Groth16 的该项包括 raw proof 和最终盲化，但不包括 prepare 与证明写盘。CUDA 和 HIP 后端在这三层上保持相同的封装。
+
+Groth16 的 `matmul s` 在填充前有 `s²(s+1)` 条约束。`s=80` 时为 518,400，仍填充到 `2^19`；`s=81` 时为 538,002，是首个填充到 `2^20` 的规模。因此 `matmul 81` 适合临界规模测试，文档仍使用 `matmul 100` 作为留有余量的 Groth16 大规模示例；`matmul 79` 只有 499,280 条原始约束，不会进入 `2^20` 域。
 
 如果只需要一条命令完成构建和端到端运行，可使用：
 
 ```bash
-make groth16-test-cpu GROTH16_CPU_MATRIX_SIZE=100
-make groth16-test-cuda CUDA_ARCH=80 GROTH16_CUDA_MATRIX_SIZE=100
-make groth16-test-hip HIP_ARCH=<gfx-arch> GROTH16_HIP_MATRIX_SIZE=100
+make groth16-test-cpu PROFILE=1 GROTH16_CPU_MATRIX_SIZE=100
+make groth16-test-cuda PROFILE=1 CUDA_ARCH=80 GROTH16_CUDA_MATRIX_SIZE=100
+make groth16-test-hip PROFILE=1 HIP_ARCH=<gfx-arch> GROTH16_HIP_MATRIX_SIZE=100
 ```
 
 `groth16-dcu` 和 `groth16-test-dcu` 分别是 HIP 构建与测试目标的兼容性别名。
@@ -136,10 +140,10 @@ HIP 实现以 DCU 兼容性为优先：继续使用无硬件进位链假设的�
 make plonk-cpu
 PLONK_BIN=build/plonk/bin
 
-"$PLONK_BIN/plonk-gen" matmul 79
-"$PLONK_BIN/plonk-setup" --backend cpu matmul_79.bin
-"$PLONK_BIN/plonk-prove" --backend cpu matmul_79.bin
-"$PLONK_BIN/plonk-verify" matmul_79.bin
+"$PLONK_BIN/plonk-gen" --profile matmul 79
+"$PLONK_BIN/plonk-setup" --profile --backend cpu matmul_79.bin
+"$PLONK_BIN/plonk-prove" --profile --backend cpu matmul_79.bin
+"$PLONK_BIN/plonk-verify" --profile matmul_79.bin
 ```
 
 ### 使用 NVIDIA CUDA 后端
@@ -150,10 +154,10 @@ CUDA 配置仍生成同名的四个程序，不会生成后端专属可执行文
 make plonk-cuda CUDA_ARCH=120
 PLONK_BIN=build/plonk/bin
 
-"$PLONK_BIN/plonk-gen" matmul 10
-"$PLONK_BIN/plonk-setup" --backend cuda matmul_10.bin
-"$PLONK_BIN/plonk-prove" --backend cuda matmul_10.bin
-"$PLONK_BIN/plonk-verify" matmul_10.bin
+"$PLONK_BIN/plonk-gen" --profile matmul 79
+"$PLONK_BIN/plonk-setup" --profile --backend cuda matmul_79.bin
+"$PLONK_BIN/plonk-prove" --profile --backend cuda matmul_79.bin
+"$PLONK_BIN/plonk-verify" --profile matmul_79.bin
 ```
 
 这里的 `plonk-setup --backend cuda` 在内部调用 CPU Setup；Setup 不使用 GPU 生成 SRS 或固定多项式，但会在 CPU 上生成 NTT 幂表并写入 PK。选择 CUDA 后端的意义是保持四阶段接口一致，并让随后读取同一 PK 的 Prove 使用 GPU。PK 格式包含这些预计算数据，更新程序后需要重新运行 Setup，不能复用旧 PK。
@@ -167,16 +171,16 @@ make plonk-clean
 make plonk-hip HIP_ARCH=<gfx-arch>
 PLONK_BIN=build/plonk/bin
 
-"$PLONK_BIN/plonk-gen" matmul 10
-"$PLONK_BIN/plonk-setup" --backend hip matmul_10.bin
-"$PLONK_BIN/plonk-prove" --backend hip matmul_10.bin
-"$PLONK_BIN/plonk-verify" matmul_10.bin
+"$PLONK_BIN/plonk-gen" --profile matmul 79
+"$PLONK_BIN/plonk-setup" --profile --backend hip matmul_79.bin
+"$PLONK_BIN/plonk-prove" --profile --backend hip matmul_79.bin
+"$PLONK_BIN/plonk-verify" --profile matmul_79.bin
 ```
 
 包含共享 HIP 算子对照测试和端到端证明验证的回归命令为：
 
 ```bash
-make plonk-test-hip HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=10
+make plonk-test-hip PROFILE=1 HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=79
 ```
 
 `plonk-dcu` 和 `plonk-test-dcu` 是对应 HIP 目标的兼容性别名。
@@ -186,22 +190,22 @@ make plonk-test-hip HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=10
 ```bash
 PLONK_BIN=build/plonk/bin
 
-"$PLONK_BIN/plonk-gen" fibonacci 10
-"$PLONK_BIN/plonk-setup" --backend cpu \
+"$PLONK_BIN/plonk-gen" --profile fibonacci 10
+"$PLONK_BIN/plonk-setup" --profile --backend cpu \
   --srs matmul_79.srs.bin fibonacci_10.bin
-"$PLONK_BIN/plonk-prove" --backend cpu fibonacci_10.bin
-"$PLONK_BIN/plonk-verify" fibonacci_10.bin
+"$PLONK_BIN/plonk-prove" --profile --backend cpu fibonacci_10.bin
+"$PLONK_BIN/plonk-verify" --profile fibonacci_10.bin
 ```
 
 PLONK 使用独立的 `build/plonk` 构建树，产物默认位于 `build/plonk/data`。与 Groth16 一样，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖默认产物目录；使用默认目录时无需传入。四个程序都可添加 `--profile` 输出阶段耗时。CPU Setup 的 FixMSM 与 Setup 专用 MSM 在调用层使用 OpenMP，可通过 `OMP_NUM_THREADS=<线程数>` 控制；CPU Prove 保持单线程，且项目不会开启 libff/libfqfft 的全局 `MULTICORE`。快速构建、端到端测试和分层测试命令如下：
 
 ```bash
 make plonk-cpu
-make plonk-test-cpu
+make plonk-test-cpu PROFILE=1 PLONK_CPU_MATRIX_SIZE=79
 make plonk-cuda CUDA_ARCH=120
-make plonk-test-cuda CUDA_ARCH=120 PLONK_CUDA_MATRIX_SIZE=10
+make plonk-test-cuda PROFILE=1 CUDA_ARCH=120 PLONK_CUDA_MATRIX_SIZE=79
 make plonk-hip HIP_ARCH=<gfx-arch>
-make plonk-test-hip HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=10
+make plonk-test-hip PROFILE=1 HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=79
 make plonk-test-arithmetization
 make plonk-test-cpu-setup
 make plonk-test-cpu-prove-verify
@@ -216,9 +220,9 @@ workspace。它包含 AIR、有限域与 FFT、Merkle 承诺、FRI、Prover、Ve
 以及示例程序。与 Groth16 和 PLONK 不同，STARK 不需要可信设置；示例程序会在
 一次运行中构造执行轨迹、生成证明、完成序列化往返并验证证明。
 
-当前集成保留的是 Winterfell 多线程 CPU 实现，尚未接入本仓库的 CUDA/HIP
-共享算子。构建时启用 `concurrent` feature，由 Rayon 并行执行证明计算；
-`THREADS` 通过 `RAYON_NUM_THREADS` 控制工作线程数。构建需要 Rust 1.87 和
+当前 Winterfell 集成已同样支持在 CPU、NVIDIA GPU 和 DCU 平台环境中构建与运行。
+构建时启用 `concurrent` feature，由 Rayon 并行调度证明任务；`THREADS` 通过
+`RAYON_NUM_THREADS` 控制工作线程数。构建需要 Rust 1.87 和
 Cargo，工具链版本记录在 `protocols/stark/winterfell/rust-toolchain.toml`。
 
 在仓库根目录构建 release 版本：
@@ -230,7 +234,6 @@ make stark THREADS=8
 运行矩阵乘法证明与验证示例：
 
 ```bash
-make stark-matmul THREADS=8 MATRIX_SIZE=8
 make stark-matmul THREADS=8 MATRIX_SIZE=8 PROFILE=1
 ```
 
@@ -286,6 +289,7 @@ RAYON_NUM_THREADS=8 \
 - `PLONK_BUILD_DIR`：PLONK CMake 构建目录，默认为 `build/plonk`；
 - `PLONK_BIN_DIR`：PLONK 可执行文件目录，默认为 `build/plonk/bin`；
 - `PLONK_DATA_DIR`：PLONK 产物目录，默认为 `build/plonk/data`。
+- `PLONK_CPU_MATRIX_SIZE`：`plonk-test-cpu` 使用的矩阵规模，默认为 `2`。
 - `PLONK_CUDA_MATRIX_SIZE`：`plonk-test-cuda` 使用的矩阵规模，默认为 `10`。
 - `PLONK_HIP_MATRIX_SIZE`：`plonk-test-hip` 使用的矩阵规模，默认为 `10`。
 - `THREADS`：Winterfell/Rayon 工作线程数，默认为 `4`；

@@ -17,6 +17,10 @@ BN254 域、曲线、NTT、MSM 及设备运行时代码通过顶层 `operators/c
 
 CPU、CUDA 和 HIP 从构建到验证的完整命令统一维护在仓库根目录的 [Groth16 构建与运行](../../README.md#groth16-构建与运行) 一节，避免两处文档重复后产生差异。
 
+## Prove 封装与计时
+
+Groth16 与 PLONK 采用一致的 `prepare/prove` 生命周期。CPU 的 prepare 为空；CUDA 与 HIP 均在 prepare 中建立设备布局、生成 NTT 幂表并上传 PK，在 prove 中只上传 witness 并执行在线证明数据流。`groth16.prove.program_total` 表示命令行程序的端到端时间，`groth16.prove.prepare_backend` 表示可预处理阶段，`groth16.prove.total` 则只包含 raw proof 生成和最终盲化。
+
 ## CPU 并行策略
 
 CPU Setup 为 G1/G2 分别预计算固定基窗口表，并通过公共 CPU FixMSM 算子并行生成 A、B、L、H 和 IC 查询。并行度由 `OMP_NUM_THREADS` 控制。CPU Prove 用于跨实现性能比较，因此 SpMV、NTT 和变基 MSM 均保持单线程；项目不会启用 libff/libfqfft 的全局 `MULTICORE` 宏。
