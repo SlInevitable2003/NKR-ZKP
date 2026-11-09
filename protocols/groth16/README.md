@@ -19,11 +19,12 @@ CPU、CUDA 和 HIP 从构建到验证的完整命令统一维护在仓库根目�
 
 ## 支持的电路
 
-`groth16-gen` 当前支持矩阵乘法和 Poseidon hash：
+`groth16-gen` 当前支持矩阵乘法、Poseidon hash 和可验证 SQL 聚合：
 
 ```bash
 groth16-gen matmul <matrix-size>
 groth16-gen poseidon [count]
+groth16-gen sql-aggregate <rows>
 ```
 
 Poseidon 使用 BN254 标量域上的 `x^5`、`t=3`、`R_F=8`、`R_P=57`
@@ -31,10 +32,24 @@ Poseidon 使用 BN254 标量域上的 `x^5`、`t=3`、`R_F=8`、`R_P=57`
 原像作为私有见证，将摘要作为公开输入；`count` 默认为 1，可用于生成多个相互
 独立的哈希约束。参数与 CUDA 目录中的参考 Sage 文件一致。
 
+SQL 示例实现以下固定查询，其中私有表由公开的 Poseidon Merkle Root 绑定，
+查询条件、COUNT 和 SUM 均为公开输入：
+
+```sql
+SELECT COUNT(*), SUM(amount)
+FROM transactions
+WHERE category = :target_category;
+```
+
+`category` 和 `amount` 都约束为 `UINT32`，不支持 NULL、字符串、JOIN、排序或
+任意 SQL 解析。`rows` 必须是不小于 2 的二次幂。1024 行会产生 969324 条
+原始约束，R1CS 行列均填充为 `2^20`。
+
 约束测试和 CPU 端到端回归可通过以下命令运行：
 
 ```bash
 make groth16-test-poseidon PROFILE=1 GROTH16_POSEIDON_COUNT=1
+make groth16-test-sql-aggregate PROFILE=1 GROTH16_SQL_ROWS=4
 ```
 
 ## Prove 封装与计时

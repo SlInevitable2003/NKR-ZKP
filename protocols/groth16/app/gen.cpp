@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -14,6 +15,7 @@
 #include "profile.hpp"
 #include "r1cs/poseidon.hpp"
 #include "r1cs/r1cs.hpp"
+#include "r1cs/sql_aggregate.hpp"
 
 using namespace std;
 using namespace LightZK;
@@ -117,11 +119,45 @@ static void build_poseidon(R1CSManager<FieldT> &mgr,
     }
 }
 
+static void build_sql_aggregate(R1CSManager<FieldT> &mgr,
+                                map<size_t, FieldT> &assignment,
+                                const size_t row_count)
+{
+    if (row_count < 2 || !SqlAggregate::is_power_of_two(row_count))
+        throw invalid_argument("SQL row count must be a power of two and at least 2");
+
+    vector<SqlAggregate::Row<FieldT>> rows;
+    rows.reserve(row_count);
+    for (size_t i = 0; i < row_count; ++i) {
+        const uint32_t category =
+            static_cast<uint32_t>(FieldT::random_element().as_ulong() % 16);
+        const uint32_t amount =
+            static_cast<uint32_t>(FieldT::random_element().as_ulong());
+        rows.push_back({FieldT(static_cast<long>(category)),
+                        FieldT(static_cast<long>(amount))});
+    }
+    const FieldT target_value = rows.front().category;
+    const auto result = SqlAggregate::evaluate(rows, target_value);
+
+    Variable<FieldT> table_root(VariableType::Public, mgr);
+    Variable<FieldT> target_category(VariableType::Public, mgr);
+    Variable<FieldT> expected_count(VariableType::Public, mgr);
+    Variable<FieldT> expected_sum(VariableType::Public, mgr);
+    assignment[table_root.get_id()] = result.table_root;
+    assignment[target_category.get_id()] = target_value;
+    assignment[expected_count.get_id()] = result.count;
+    assignment[expected_sum.get_id()] = result.sum;
+    SqlAggregate::add_query_constraints(
+        mgr, assignment, rows, table_root, target_category, target_value,
+        expected_count, expected_sum);
+}
+
 static void usage(const char *prog) {
     cerr << "Usage: " << prog << " [--profile] <case> [params...]\n"
          << "  cases:\n"
          << "    matmul <size>      matrix-multiplication R1CS of dimension <size>\n"
          << "    poseidon [count]   <count> independent private-input Poseidon hashes\n"
+         << "    sql-aggregate <rows>  verify COUNT/SUM over a committed private table\n"
          << "  Outputs (in " APP_DATA_DIR "):\n"
          << "    <stem>.bin         R1CS (k, num_cols, A, B, C)\n"
          << "    <stem>.witness.bin satisfying witness z (size num_cols)\n";
@@ -162,6 +198,14 @@ int main(int argc, char *argv[]) {
             build_poseidon(mgr, assignment, count);
         }
         stem = "poseidon_" + to_string(count);
+    } else if (case_name == "sql-aggregate") {
+        if (arguments.size() < 2) usage(argv[0]);
+        const size_t rows = parse_positive_size(arguments[1]);
+        {
+            nkr::ProfileScope stage("groth16.gen.build_sql_aggregate");
+            build_sql_aggregate(mgr, assignment, rows);
+        }
+        stem = "sql_aggregate_" + to_string(rows);
     } else {
         cerr << "Unknown case: " << case_name << "\n";
         usage(argv[0]);
