@@ -17,6 +17,7 @@ CUDA_HOME ?= /usr/local/cuda
 GROTH16_CPU_MATRIX_SIZE ?= 4
 GROTH16_CUDA_MATRIX_SIZE ?= 12
 GROTH16_HIP_MATRIX_SIZE ?= 12
+GROTH16_POSEIDON_COUNT ?= 1
 PLONK_CPU_MATRIX_SIZE ?= 2
 PLONK_CUDA_MATRIX_SIZE ?= 10
 PLONK_HIP_MATRIX_SIZE ?= 10
@@ -24,7 +25,7 @@ LIGHTZK_DEPS_DIR ?= $(CURDIR)/third_party/lightzk/depends
 PROFILE_FLAG = $(if $(filter 1 true yes on,$(PROFILE)),--profile,)
 HIP_ARCH_FLAG = $(if $(strip $(HIP_ARCH)),-DCMAKE_HIP_ARCHITECTURES=$(HIP_ARCH),)
 
-.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-clean plonk-cpu plonk-cuda plonk-hip plonk-dcu plonk-scaffold plonk-test-cpu plonk-test-cuda plonk-test-hip plonk-test-dcu plonk-test-arithmetization plonk-test-cpu-setup plonk-test-cpu-prove-verify plonk-clean stark stark-matmul clean
+.PHONY: help check groth16-cpu groth16-cuda groth16-hip groth16-dcu groth16-test-cpu groth16-test-cuda groth16-test-hip groth16-test-dcu groth16-test-poseidon groth16-clean plonk-cpu plonk-cuda plonk-hip plonk-dcu plonk-scaffold plonk-test-cpu plonk-test-cuda plonk-test-hip plonk-test-dcu plonk-test-arithmetization plonk-test-cpu-setup plonk-test-cpu-prove-verify plonk-clean stark stark-matmul clean
 
 help:
 	@echo "NKR-ZKP targets:"
@@ -35,6 +36,7 @@ help:
 	@echo "  groth16-test-cpu   run a small CPU setup/prove/verify flow"
 	@echo "  groth16-test-cuda  run a CUDA setup/prove/verify flow"
 	@echo "  groth16-test-hip   run a HIP setup/prove/verify flow"
+	@echo "  groth16-test-poseidon  test Poseidon constraints and a CPU end-to-end flow"
 	@echo "  groth16-clean  remove all Groth16 CMake build trees"
 	@echo "  plonk-cpu      configure and build PLONK with the CPU backend"
 	@echo "  plonk-cuda     configure and build PLONK with CPU and NVIDIA CUDA backends"
@@ -106,6 +108,15 @@ groth16-test-hip: groth16-hip
 	$(GROTH16_BIN_DIR)/groth16-verify $(PROFILE_FLAG) matmul_$(GROTH16_HIP_MATRIX_SIZE).bin
 
 groth16-test-dcu: groth16-test-hip
+
+groth16-test-poseidon: groth16-cpu
+	cmake --build $(GROTH16_BUILD_DIR) --parallel $(JOBS) \
+		--target groth16-poseidon-test
+	$(GROTH16_BUILD_DIR)/protocols/groth16/groth16-poseidon-test
+	$(GROTH16_BIN_DIR)/groth16-gen $(PROFILE_FLAG) poseidon $(GROTH16_POSEIDON_COUNT)
+	$(GROTH16_BIN_DIR)/groth16-setup $(PROFILE_FLAG) --backend cpu poseidon_$(GROTH16_POSEIDON_COUNT).bin
+	$(GROTH16_BIN_DIR)/groth16-prove $(PROFILE_FLAG) --backend cpu poseidon_$(GROTH16_POSEIDON_COUNT).bin
+	$(GROTH16_BIN_DIR)/groth16-verify $(PROFILE_FLAG) poseidon_$(GROTH16_POSEIDON_COUNT).bin
 
 groth16-clean:
 	cmake -E rm -rf \

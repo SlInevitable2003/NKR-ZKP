@@ -17,6 +17,26 @@ BN254 域、曲线、NTT、MSM 及设备运行时代码通过顶层 `operators/c
 
 CPU、CUDA 和 HIP 从构建到验证的完整命令统一维护在仓库根目录的 [Groth16 构建与运行](../../README.md#groth16-构建与运行) 一节，避免两处文档重复后产生差异。
 
+## 支持的电路
+
+`groth16-gen` 当前支持矩阵乘法和 Poseidon hash：
+
+```bash
+groth16-gen matmul <matrix-size>
+groth16-gen poseidon [count]
+```
+
+Poseidon 使用 BN254 标量域上的 `x^5`、`t=3`、`R_F=8`、`R_P=57`
+参数，二输入哈希定义为 `Poseidon([0, left, right])[0]`。每个实例将左右
+原像作为私有见证，将摘要作为公开输入；`count` 默认为 1，可用于生成多个相互
+独立的哈希约束。参数与 CUDA 目录中的参考 Sage 文件一致。
+
+约束测试和 CPU 端到端回归可通过以下命令运行：
+
+```bash
+make groth16-test-poseidon PROFILE=1 GROTH16_POSEIDON_COUNT=1
+```
+
 ## Prove 封装与计时
 
 Groth16 与 PLONK 采用一致的 `prepare/prove` 生命周期。CPU 的 prepare 为空；CUDA 与 HIP 均在 prepare 中建立设备布局、生成 NTT 幂表并上传 PK，在 prove 中只上传 witness 并执行在线证明数据流。`groth16.prove.program_total` 表示命令行程序的端到端时间，`groth16.prove.prepare_backend` 表示可预处理阶段，`groth16.prove.total` 则只包含 raw proof 生成和最终盲化。

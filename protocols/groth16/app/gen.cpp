@@ -1,7 +1,9 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -10,6 +12,7 @@
 
 #include "groth16/io.hpp"
 #include "profile.hpp"
+#include "r1cs/poseidon.hpp"
 #include "r1cs/r1cs.hpp"
 
 using namespace std;
@@ -76,10 +79,49 @@ static void build_matmul(R1CSManager<FieldT> &mgr, map<size_t, FieldT> &assignme
     }
 }
 
+static size_t parse_positive_size(const string &text)
+{
+    if (text.empty()) throw invalid_argument("invalid positive size: " + text);
+    for (const char character : text) {
+        if (character < '0' || character > '9')
+            throw invalid_argument("invalid positive size: " + text);
+    }
+    size_t consumed = 0;
+    const unsigned long long parsed = stoull(text, &consumed);
+    if (consumed != text.size() || parsed == 0 ||
+        parsed > numeric_limits<size_t>::max()) {
+        throw invalid_argument("invalid positive size: " + text);
+    }
+    return static_cast<size_t>(parsed);
+}
+
+static void build_poseidon(R1CSManager<FieldT> &mgr,
+                           map<size_t, FieldT> &assignment,
+                           const size_t count)
+{
+    for (size_t i = 0; i < count; ++i) {
+        const FieldT left_value = FieldT::random_element();
+        const FieldT right_value = FieldT::random_element();
+        const FieldT digest_value = Poseidon::hash2(left_value, right_value);
+
+        // Only the digest is public: the circuit proves knowledge of a pair of
+        // private field elements whose Poseidon hash equals this value.
+        Variable<FieldT> digest(VariableType::Public, mgr);
+        Variable<FieldT> left(VariableType::Private, mgr);
+        Variable<FieldT> right(VariableType::Private, mgr);
+        assignment[digest.get_id()] = digest_value;
+        assignment[left.get_id()] = left_value;
+        assignment[right.get_id()] = right_value;
+        Poseidon::add_hash2_constraints(
+            mgr, assignment, left, left_value, right, right_value, digest);
+    }
+}
+
 static void usage(const char *prog) {
     cerr << "Usage: " << prog << " [--profile] <case> [params...]\n"
          << "  cases:\n"
          << "    matmul <size>      matrix-multiplication R1CS of dimension <size>\n"
+         << "    poseidon [count]   <count> independent private-input Poseidon hashes\n"
          << "  Outputs (in " APP_DATA_DIR "):\n"
          << "    <stem>.bin         R1CS (k, num_cols, A, B, C)\n"
          << "    <stem>.witness.bin satisfying witness z (size num_cols)\n";
@@ -113,6 +155,13 @@ int main(int argc, char *argv[]) {
             build_matmul(mgr, assignment, s);
         }
         stem = "matmul_" + to_string(s);
+    } else if (case_name == "poseidon") {
+        const size_t count = arguments.size() < 2 ? 1 : parse_positive_size(arguments[1]);
+        {
+            nkr::ProfileScope stage("groth16.gen.build_poseidon");
+            build_poseidon(mgr, assignment, count);
+        }
+        stem = "poseidon_" + to_string(count);
     } else {
         cerr << "Unknown case: " << case_name << "\n";
         usage(argv[0]);

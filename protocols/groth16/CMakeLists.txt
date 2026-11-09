@@ -23,6 +23,10 @@ target_link_libraries(nkr_groth16_common PUBLIC
 add_library(nkr_groth16_cpu STATIC backends/cpu/src/backend.cpp)
 target_link_libraries(nkr_groth16_cpu PUBLIC nkr_groth16_common)
 
+add_executable(groth16-poseidon-test EXCLUDE_FROM_ALL
+    tests/poseidon_test.cpp)
+target_link_libraries(groth16-poseidon-test PRIVATE nkr_groth16_common)
+
 set(NKR_ZKP_GROTH16_ACCELERATOR_TARGET "")
 if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")
     add_subdirectory(backends/cuda)

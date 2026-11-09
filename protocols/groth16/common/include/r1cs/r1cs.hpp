@@ -1,7 +1,9 @@
 #pragma once
 #include <cstddef>
-#include <vector>
 #include <map>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 
 #include "r1cs/spmat.hpp"
 
@@ -120,7 +122,18 @@ public:
         for (const auto& [id, coeff] : other.terms) result.terms[id] += coeff;
         return std::move(result);
     }
+    LinearCombination<S>& operator+=(const LinearCombination<S>& other) {
+        for (const auto& [id, coeff] : other.terms) terms[id] += coeff;
+        return *this;
+    }
     LinearCombination<S>& operator+=(const Variable<S>& var) { terms[var.get_id()] += S{1}; return *this; }
+
+    LinearCombination<S> operator*(const S& scalar) const {
+        LinearCombination<S> result;
+        result.terms.clear();
+        for (const auto& [id, coeff] : terms) result.terms[id] = coeff * scalar;
+        return result;
+    }
 
     const std::map<size_t, S>& get_terms() const { return terms; }
 };

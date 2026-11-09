@@ -64,6 +64,17 @@ G16=build/groth16/bin
 "$G16/groth16-verify" --profile matmul_100.bin
 ```
 
+```bash
+make groth16-clean
+make groth16-cpu
+
+G16=build/groth16/bin
+"$G16/groth16-gen" --profile poseidon 2377
+"$G16/groth16-setup" --profile --backend cpu poseidon_2377.bin
+"$G16/groth16-prove" --profile --backend cpu poseidon_2377.bin
+"$G16/groth16-verify" --profile poseidon_2377.bin
+```
+
 ### 使用 NVIDIA CUDA 后端
 
 `CUDA_ARCH` 应设置为目标 GPU 的计算能力，例如 `80` 表示 compute capability 8.0。CUDA 默认位于 `/usr/local/cuda`；安装在其他位置时可额外传入 `CUDA_HOME=/path/to/cuda`。
