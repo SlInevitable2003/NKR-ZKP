@@ -40,18 +40,12 @@ Rescue、随机化 AIR、Merkle membership 和 Lamport+ signature 等示例。
 `matrix-mul`（别名 `matmul`）和 `fib`（别名 `fibonacci`）支持全局参数
 `--data-mode dense|sparse|hybrid`，可放在子命令前后，默认 `dense`。
 这里的 `fib` 是双列执行轨迹的 Fibonacci 示例；其他 Fibonacci 变体及其他
-示例不支持 sparse/hybrid，显式指定时会报错。
+示例不支持 sparse/hybrid。
 
 - `dense`：所有输入均为随机非零域元素。
 - `sparse`：对于 N 个输入，随机分布恰好 `floor(N / 2)` 个零，其余为随机非零值。
 - `hybrid`：前 `ceil(N / 2)` 个输入为随机非零值；后 `floor(N / 2)` 个输入
   采用 sparse 模式，整个输入恰好有 `floor(floor(N / 2) / 2)` 个零。
-
-与 Groth16/PLONK 相同，模式只作用于输入，而不是中间轨迹或输出。
-矩阵输入按 `A[0], B[0], A[1], B[1], ...` 的顺序应用模式；两个矩阵内部
-均为行主序。Fibonacci 的输入只有两个初始值，因此 sparse 恰好一个零，
-hybrid 因取整没有零。Fibonacci AIR 同时绑定两个初始值与最终结果。
-矩阵边长须为不小于 2 的 2 的幂，Fibonacci 长度须为不小于 16 的 2 的幂。
 
 ```bash
 protocols/stark/winterfell/target/release/winterfell \
@@ -59,35 +53,6 @@ protocols/stark/winterfell/target/release/winterfell \
 protocols/stark/winterfell/target/release/winterfell \
   fib -n 32 --data-mode hybrid --profile
 ```
-
-## Slurm 完整测试
-
-在仓库根目录提交：
-
-```bash
-sbatch scripts/test-stark-data-modes.sh
-```
-
-脚本默认使用已安装的 `stable` 工具链，可用 `STARK_RUST_TOOLCHAIN` 覆盖，
-不依赖 workspace 固定的 `1.87` 工具链。
-
-脚本只编译一次，并对 matmul/fibonacci 的 dense/sparse/hybrid 各执行一次
-完整的输入生成、执行轨迹构造、证明生成、序列化往返和验证，共六次运行，
-全部带 `--profile`。STARK 不需要 setup 阶段。验证失败以非零状态退出，
-作业不会打印对应的 PASS。
-
-默认矩阵边长 64、Fibonacci 长度 32、Rayon 线程数等于 Slurm 分配的 CPU 数。
-可通过环境变量覆盖：
-
-```bash
-sbatch --cpus-per-task=8 \
-  --export=ALL,STARK_RUST_TOOLCHAIN=stable,STARK_MATRIX_SIZE=8,STARK_FIBONACCI_LENGTH=64 \
-  scripts/test-stark-data-modes.sh
-```
-
-`STARK_MODES_BUILD_DIR` 可指定 Cargo 产物目录，默认
-`/tmp/stark-data-modes-${SLURM_JOB_ID}`。脚本使用 CPU/Rayon，不提供 CUDA/HIP
-切换；`module load cuda` 本身不会让 Winterfell 使用 GPU。
 
 ## 安全边界
 

@@ -44,12 +44,8 @@ CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各
 - `dense`：100% 输入为随机非零值。
 - `sparse`：50% 输入为随机非零值，50% 为零，零的位置随机打散。
 - `hybrid`：前半段输入采用 dense，后半段采用 sparse，为 75% 随机非零值和 25% 零。
-
-输入按 `A[i], B[i]`、`left[i], right[i]` 或 `category[i], amount[i]` 交错展开。
 hybrid 的 dense 段在输入总数为奇数时向上取整，各 sparse 段的零数量向下取整。
-因此极小规模的 hybrid 可能没有零。比例只约束原始输入，不约束矩阵乘积、哈希、
-COUNT/SUM、内部见证或填充列；所有派生值仍按电路语义计算。SQL 的随机 category
-为 1–15，随机 amount 为非零 UINT32，零仍是合法的输入值。
+因此极小规模的 hybrid 可能没有零。
 
 默认 dense 保留原文件名（如 `matmul_100.bin`）；sparse 和 hybrid 分别使用
 `matmul_100_sparse.bin`、`matmul_100_hybrid.bin`，对应见证、密钥和证明沿用同一文件名前缀。
@@ -165,13 +161,9 @@ make groth16-test-hip PROFILE=1 HIP_ARCH=<gfx-arch> GROTH16_HIP_MATRIX_SIZE=100
 ### 电路输入数据模式
 
 `plonk-gen` 的 `matmul` 和 `fibonacci` 同样支持
-`--data-mode dense|sparse|hybrid`，定义与 Groth16 一致：dense 全部随机非零，
-sparse 一半随机非零、一半为零（位置随机），hybrid 前半段 dense、后半段 sparse。
-各 sparse 段的零数量向下取整，数据模式仅影响原始输入，不修改派生见证。
+`--data-mode dense|sparse|hybrid`，定义与 Groth16 一致。
 
-矩阵输入按 `A[i], B[i]` 交错展开；Fibonacci 只有两个种子 `F0, F1`，因此 sparse
-恰有一个零，hybrid 的后一段仅含一个种子，向下取整后没有零，与 dense 一样为两个
-随机非零种子。所有递推项和最终公开结果仍由这两个种子计算，而不是独立随机采样。
+Fibonacci 只有两个种子 `F0, F1`，因此 sparse恰有一个零，hybrid 的后一段仅含一个种子，向下取整后没有零，与 dense 一样为两个随机非零种子。
 
 ```bash
 PLONK_BIN=build/plonk/bin
@@ -181,11 +173,6 @@ PLONK_BIN=build/plonk/bin
 "$PLONK_BIN/plonk-prove" --backend cpu fibonacci_10_hybrid.bin
 "$PLONK_BIN/plonk-verify" fibonacci_10_hybrid.bin
 ```
-
-默认 dense 保留原文件名（如 `matmul_4.bin`、`fibonacci_10.bin`）；其他模式分别追加
-`_sparse`、`_hybrid`，见证、SRS、密钥和证明使用同一前缀。两类电路的模式与
-端到端回归通过 `sbatch scripts/test-plonk-data-modes.sh` 提交，详见
-`protocols/plonk/README.md` 的“数据模式回归”。
 
 ### 统一可执行程序
 
@@ -326,11 +313,6 @@ RAYON_NUM_THREADS=8 \
 
 矩阵乘法 `matrix-mul`（别名 `matmul`）和 Fibonacci `fib`（别名
 `fibonacci`）支持 `--data-mode dense|sparse|hybrid`，默认 `dense`。
-`dense` 全部为随机非零输入；`sparse` 随机分布恰好一半零值（向下取整）；
-`hybrid` 前半段为随机非零输入，后半段使用一半零值的 sparse 模式，
-分段和零值数量按整数向下取整。模式只影响输入，不改变电路或证明参数。
-Fibonacci 的输入是两个初始值，而不是整个数列，因此 sparse 恰好有一个零，
-hybrid 因取整没有零；两个初始值和最终结果都由证明绑定。
 
 ```bash
 protocols/stark/winterfell/target/release/winterfell \
@@ -338,12 +320,6 @@ protocols/stark/winterfell/target/release/winterfell \
 protocols/stark/winterfell/target/release/winterfell \
   fib -n 32 --data-mode hybrid --profile
 ```
-
-脚本默认使用已安装的 `stable` 工具链，可通过 `STARK_RUST_TOOLCHAIN` 指定其他
-兼容工具链。
-脚本默认矩阵边长为 64、Fibonacci 长度为 32，分别可通过 `STARK_MATRIX_SIZE`
-和 `STARK_FIBONACCI_LENGTH` 覆盖。Fibonacci 长度必须是不小于 16 的 2 的幂。
-此脚本测试 CPU/Rayon，不接受 Groth16/PLONK 的 CUDA/HIP 后端选项。
 
 示例程序还包含 Fibonacci、乘法 Fibonacci、VDF、Rescue hash chain、
 随机化 AIR permutation、Merkle membership 和 Lamport+ signature 等 AIR。
