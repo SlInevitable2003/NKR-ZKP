@@ -44,10 +44,13 @@ impl DataMode {
             }
         }
         if self != Self::Dense {
-            let dense_count = if self == Self::Hybrid { count - count / 2 } else { 0 };
-            let zero_count = (count - dense_count) / 2;
-            values[count - zero_count..].fill(BaseElement::ZERO);
-            shuffle(&mut values[dense_count..]);
+            let nonzero_count = if self == Self::Hybrid {
+                count / 10 + usize::from(count % 10 != 0)
+            } else {
+                count - count / 2
+            };
+            values[nonzero_count..].fill(BaseElement::ZERO);
+            shuffle(&mut values);
         }
         values
     }
@@ -60,23 +63,21 @@ mod tests {
     use super::DataMode;
 
     #[test]
-    fn modes_have_exact_zero_counts_and_dense_prefixes() {
+    fn modes_have_exact_nonzero_ratios() {
         for mode in [DataMode::Dense, DataMode::Sparse, DataMode::Hybrid] {
             assert_eq!(mode.to_string().parse::<DataMode>(), Ok(mode));
-            for count in 0..=65 {
+            for count in 0..=101 {
                 let values = mode.generate(count);
-                let dense_count = if mode == DataMode::Hybrid { count - count / 2 } else { 0 };
-                let expected = if mode == DataMode::Dense {
-                    0
-                } else {
-                    (count - dense_count) / 2
+                let expected = match mode {
+                    DataMode::Dense => 0,
+                    DataMode::Sparse => count / 2,
+                    DataMode::Hybrid => count - count.div_ceil(10),
                 };
                 assert_eq!(values.len(), count);
                 assert_eq!(
                     values.iter().filter(|&&value| value == BaseElement::ZERO).count(),
                     expected
                 );
-                assert!(values[..dense_count].iter().all(|&value| value != BaseElement::ZERO));
             }
         }
     }

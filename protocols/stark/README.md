@@ -42,10 +42,13 @@ Rescue、随机化 AIR、Merkle membership 和 Lamport+ signature 等示例。
 这里的 `fib` 是双列执行轨迹的 Fibonacci 示例；其他 Fibonacci 变体及其他
 示例不支持 sparse/hybrid。
 
-- `dense`：所有输入均为随机非零域元素。
-- `sparse`：对于 N 个输入，随机分布恰好 `floor(N / 2)` 个零，其余为随机非零值。
-- `hybrid`：前 `ceil(N / 2)` 个输入为随机非零值；后 `floor(N / 2)` 个输入
-  采用 sparse 模式，整个输入恰好有 `floor(floor(N / 2) / 2)` 个零。
+- `dense`：100% 输入为随机非零域元素。
+- `sparse`：50% 输入为随机非零域元素，非零数量为 `ceil(N / 2)`，其余为零。
+- `hybrid`：10% 输入为随机非零域元素，非零数量为 `ceil(N / 10)`，其余为零。
+
+sparse/hybrid 的零值位置全局随机打散，不保留 dense 前缀，与公共
+`input_data.hpp` 一致。比例只作用于原始输入，不修改中间轨迹或结果。
+Fibonacci 只有两个初始值，所以 sparse 和 hybrid 均为一个随机非零值、一个零值。
 
 ```bash
 protocols/stark/winterfell/target/release/winterfell \

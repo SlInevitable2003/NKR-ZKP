@@ -24,7 +24,7 @@ static void test_sampler()
 {
     for (const DataMode mode : {DataMode::Dense, DataMode::Sparse, DataMode::Hybrid}) {
         require(nkr::parse_data_mode(nkr::data_mode_name(mode)) == mode, "data mode round trip");
-        for (std::size_t count = 0; count <= 65; ++count) {
+        for (std::size_t count = 0; count <= 101; ++count) {
             const nkr::InputSampler sampler(count, mode);
             std::vector<Scalar> inputs;
             std::size_t calls = 0;
@@ -33,14 +33,12 @@ static void test_sampler()
                     return ++calls % 2 == 1 ? Scalar::zero() : Scalar::one();
                 }));
             }
-            const std::size_t dense_count = mode == DataMode::Hybrid ? count - count / 2 : 0;
-            const std::size_t zeros = mode == DataMode::Dense ? 0 : (count - dense_count) / 2;
+            const std::size_t zeros = mode == DataMode::Dense ? 0 :
+                mode == DataMode::Sparse ? count / 2 : count - (count + 9) / 10;
             require(static_cast<std::size_t>(std::count(inputs.begin(), inputs.end(),
                                                        Scalar::zero())) == zeros,
                     "incorrect sampled zero count");
             require(calls == 2 * (count - zeros), "random zero was not retried");
-            require(std::count(inputs.begin(), inputs.begin() + dense_count,
-                               Scalar::zero()) == 0, "hybrid prefix is not dense");
         }
     }
     for (const std::string name : {"", "unknown", "Dense"}) {
@@ -136,13 +134,11 @@ static void check_artifacts(const std::filesystem::path &directory)
                 check_trace(circuit, witness);
                 const auto inputs = check_inputs(case_name, size, circuit, witness);
                 const std::size_t expected_zeros = mode == DataMode::Dense ? 0 :
-                    inputs.size() / (mode == DataMode::Sparse ? 2 : 4);
+                    mode == DataMode::Sparse ? inputs.size() / 2 :
+                    inputs.size() - (inputs.size() + 9) / 10;
                 require(static_cast<std::size_t>(std::count(inputs.begin(), inputs.end(),
                                                            Scalar::zero())) == expected_zeros,
                         stem + ": incorrect input zero count");
-                if (mode == DataMode::Hybrid)
-                    require(std::count(inputs.begin(), inputs.begin() + inputs.size() / 2,
-                                       Scalar::zero()) == 0, stem + ": hybrid prefix is not dense");
                 std::cout << "PASS: " << stem << " inputs, results, gates, and copy constraints\n";
             }
         }

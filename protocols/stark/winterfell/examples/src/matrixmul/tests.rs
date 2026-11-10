@@ -68,15 +68,12 @@ fn matrixmul_data_modes_preserve_the_product_and_verify() {
         let expected_zeros = match mode {
             DataMode::Dense => 0,
             DataMode::Sparse => 16,
-            DataMode::Hybrid => 8,
+            DataMode::Hybrid => 28,
         };
         assert_eq!(
             inputs.iter().filter(|&&value| value == super::BaseElement::ZERO).count(),
             expected_zeros
         );
-        if mode == DataMode::Hybrid {
-            assert!(inputs[..16].iter().all(|&value| value != super::BaseElement::ZERO));
-        }
         assert_eq!(example.c, super::multiply(&example.a, &example.b, 4));
         let proof = example.prove();
         assert!(example.verify(proof.clone()).is_ok());

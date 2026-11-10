@@ -28,7 +28,7 @@ static void test_sampler()
 {
     for (const DataMode mode : {DataMode::Dense, DataMode::Sparse, DataMode::Hybrid}) {
         require(parse_data_mode(data_mode_name(mode)) == mode, "data mode round trip");
-        for (std::size_t count = 0; count <= 65; ++count) {
+        for (std::size_t count = 0; count <= 101; ++count) {
             const InputSampler sampler(count, mode);
             std::vector<Scalar> values;
             std::size_t calls = 0;
@@ -37,15 +37,12 @@ static void test_sampler()
                     return ++calls % 2 == 1 ? Scalar::zero() : Scalar::one();
                 }));
             }
-            const std::size_t dense_count = mode == DataMode::Hybrid ? count - count / 2 : 0;
             const std::size_t expected_zeros = mode == DataMode::Dense ? 0 :
-                (count - dense_count) / 2;
+                mode == DataMode::Sparse ? count / 2 : count - (count + 9) / 10;
             require(static_cast<std::size_t>(std::count(values.begin(), values.end(),
                                                        Scalar::zero())) == expected_zeros,
                     "incorrect zero count");
             require(calls == 2 * (count - expected_zeros), "zero random values must be retried");
-            require(std::count(values.begin(), values.begin() + dense_count,
-                               Scalar::zero()) == 0, "hybrid dense prefix contains zeros");
             for (std::size_t index = 0; index < count; ++index) {
                 require(sampler.sample<Scalar>(index, [] { return Scalar::one(); }) == values[index],
                         "input mask changes between samples");
@@ -133,7 +130,7 @@ static void check_fibonacci_artifacts(const std::filesystem::path &directory)
 
             const std::size_t zeros = static_cast<std::size_t>(std::count(
                 witness.begin() + 1, witness.begin() + 3, Scalar::zero()));
-            require(zeros == (mode == DataMode::Sparse ? 1 : 0),
+            require(zeros == (mode == DataMode::Dense ? 0 : 1),
                     stem + ": incorrect seed zero count");
             Scalar previous = witness.at(1);
             Scalar current = witness.at(2);
@@ -176,13 +173,11 @@ static void check_artifacts(const std::filesystem::path &directory)
             std::vector<Scalar> inputs;
             for (const std::size_t column : columns) inputs.push_back(witness.at(column));
             const std::size_t expected_zeros = mode == DataMode::Dense ? 0 :
-                inputs.size() / (mode == DataMode::Sparse ? 2 : 4);
+                mode == DataMode::Sparse ? inputs.size() / 2 :
+                inputs.size() - (inputs.size() + 9) / 10;
             require(static_cast<std::size_t>(std::count(inputs.begin(), inputs.end(),
                                                        Scalar::zero())) == expected_zeros,
                     stem + ": incorrect input zero count");
-            if (mode == DataMode::Hybrid)
-                require(std::count(inputs.begin(), inputs.begin() + inputs.size() / 2,
-                                   Scalar::zero()) == 0, stem + ": hybrid prefix is not dense");
         }
     }
 }

@@ -36,12 +36,13 @@ public:
         : random_mask_(count, 1)
     {
         if (mode == DataMode::Dense) return;
-        const std::size_t dense_count = mode == DataMode::Hybrid ? count - count / 2 : 0;
-        const std::size_t zero_count = (count - dense_count) / 2;
+        const std::size_t nonzero_count = mode == DataMode::Hybrid ?
+            count / 10 + (count % 10 != 0) : count - count / 2;
+        const std::size_t zero_count = count - nonzero_count;
         if (zero_count == 0) return;
         std::fill(random_mask_.end() - zero_count, random_mask_.end(), 0);
         std::mt19937_64 engine(std::random_device{}());
-        std::shuffle(random_mask_.begin() + dense_count, random_mask_.end(), engine);
+        std::shuffle(random_mask_.begin(), random_mask_.end(), engine);
     }
 
     template<typename Field, typename Generator>

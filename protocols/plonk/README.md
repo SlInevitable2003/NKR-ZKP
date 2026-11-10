@@ -83,6 +83,9 @@ CUDA Setup 当前有意委托 CPU Setup，不在 GPU 上生成 SRS；NTT 幂表�
 
 `plonk-gen` 目前支持 `matmul` 与 `fibonacci` 两种用例，两者都可添加
 `--data-mode dense|sparse|hybrid`（默认 dense）。
+三种模式的随机非零输入占比分别为 100%、50%、10%，非零数量向上取整，
+其余为零且位置随机打散，与公共 `input_data.hpp` 一致。Fibonacci 只有两个
+种子，因此 sparse 和 hybrid 均为一个随机非零种子、一个零种子。
 
 ```bash
 make plonk-cpu
@@ -134,4 +137,3 @@ make plonk-test-hip PROFILE=1 HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=79
 ```
 
 上述命令使用独立的 `build/plonk` 构建树，默认产物目录为 `build/plonk/data`。与 Groth16 相同，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖该目录；使用默认值时无需传入。自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。带 profile 的 CPU 回归可执行 `make plonk-test-cpu PROFILE=1 PLONK_CPU_MATRIX_SIZE=79`。
-

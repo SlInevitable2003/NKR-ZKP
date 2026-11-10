@@ -43,9 +43,10 @@ CUDA 和 HIP 算子由 Groth16 与 PLONK 共用。协议专属逻辑保留在各
 
 - `dense`：100% 输入为随机非零值。
 - `sparse`：50% 输入为随机非零值，50% 为零，零的位置随机打散。
-- `hybrid`：前半段输入采用 dense，后半段采用 sparse，为 75% 随机非零值和 25% 零。
-hybrid 的 dense 段在输入总数为奇数时向上取整，各 sparse 段的零数量向下取整。
-因此极小规模的 hybrid 可能没有零。
+- `hybrid`：10% 输入为随机非零值，90% 为零，零的位置随机打散，不再保留 dense 前缀。
+
+对于 N 个输入，dense、sparse、hybrid 的非零数量分别为 N、`ceil(N / 2)`、
+`ceil(N / 10)`，其余为零；比例只作用于原始输入，不改变派生见证。
 
 默认 dense 保留原文件名（如 `matmul_100.bin`）；sparse 和 hybrid 分别使用
 `matmul_100_sparse.bin`、`matmul_100_hybrid.bin`，对应见证、密钥和证明沿用同一文件名前缀。
@@ -163,7 +164,8 @@ make groth16-test-hip PROFILE=1 HIP_ARCH=<gfx-arch> GROTH16_HIP_MATRIX_SIZE=100
 `plonk-gen` 的 `matmul` 和 `fibonacci` 同样支持
 `--data-mode dense|sparse|hybrid`，定义与 Groth16 一致。
 
-Fibonacci 只有两个种子 `F0, F1`，因此 sparse恰有一个零，hybrid 的后一段仅含一个种子，向下取整后没有零，与 dense 一样为两个随机非零种子。
+Fibonacci 只有两个种子 `F0, F1`，因此 sparse 和 hybrid 在向上取整后均为
+一个随机非零种子、一个零种子；所有递推项和结果仍由这两个种子计算。
 
 ```bash
 PLONK_BIN=build/plonk/bin
@@ -313,6 +315,7 @@ RAYON_NUM_THREADS=8 \
 
 矩阵乘法 `matrix-mul`（别名 `matmul`）和 Fibonacci `fib`（别名
 `fibonacci`）支持 `--data-mode dense|sparse|hybrid`，默认 `dense`。
+非零输入占比同样为 100%、50%、10%，非零数量向上取整，其余位置为零并随机打散。
 
 ```bash
 protocols/stark/winterfell/target/release/winterfell \

@@ -34,7 +34,7 @@ fn fibonacci_data_modes_bind_both_seeds_and_the_result() {
         let seeds = [inputs[0], inputs[1]];
         assert_eq!(
             inputs.iter().filter(|&&value| value == BaseElement::ZERO).count(),
-            if mode == DataMode::Sparse { 1 } else { 0 }
+            if mode == DataMode::Dense { 0 } else { 1 }
         );
         let mut example =
             FibExample::<Blake3_256>::new_with_inputs(16, build_proof_options(false), seeds, false);
