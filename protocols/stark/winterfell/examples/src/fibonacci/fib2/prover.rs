@@ -10,8 +10,8 @@ use winterfell::{
 };
 
 use super::{
-    BaseElement, DefaultRandomCoin, ElementHasher, FibAir, FieldElement, PhantomData, ProofOptions,
-    Prover, TRACE_WIDTH,
+    air::PublicInputs, BaseElement, DefaultRandomCoin, ElementHasher, FibAir, FieldElement,
+    PhantomData, ProofOptions, Prover, TRACE_WIDTH,
 };
 
 // FIBONACCI PROVER
@@ -29,14 +29,18 @@ impl<H: ElementHasher> FibProver<H> {
 
     /// Builds an execution trace for computing a Fibonacci sequence of the specified length such
     /// that each row advances the sequence by 2 terms.
-    pub fn build_trace(&self, sequence_length: usize) -> TraceTable<BaseElement> {
+    pub fn build_trace(
+        &self,
+        sequence_length: usize,
+        seeds: [BaseElement; 2],
+    ) -> TraceTable<BaseElement> {
         assert!(sequence_length.is_power_of_two(), "sequence length must be a power of 2");
 
         let mut trace = TraceTable::new(TRACE_WIDTH, sequence_length / 2);
         trace.fill(
             |state| {
-                state[0] = BaseElement::ONE;
-                state[1] = BaseElement::ONE;
+                state[0] = seeds[0];
+                state[1] = seeds[1];
             },
             |_, state| {
                 state[0] += state[1];
@@ -65,9 +69,12 @@ where
     type ConstraintEvaluator<'a, E: FieldElement<BaseField = Self::BaseField>> =
         DefaultConstraintEvaluator<'a, Self::Air, E>;
 
-    fn get_pub_inputs(&self, trace: &Self::Trace) -> BaseElement {
+    fn get_pub_inputs(&self, trace: &Self::Trace) -> PublicInputs {
         let last_step = trace.length() - 1;
-        trace.get(1, last_step)
+        PublicInputs {
+            seeds: [trace.get(0, 0), trace.get(1, 0)],
+            result: trace.get(1, last_step),
+        }
     }
 
     fn options(&self) -> &ProofOptions {

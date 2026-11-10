@@ -6,7 +6,6 @@
 use core::marker::PhantomData;
 use std::time::Instant;
 
-use rand_utils::rand_vector;
 use tracing::{field, info_span};
 use winterfell::{
     crypto::{DefaultRandomCoin, ElementHasher, MerkleTree},
@@ -14,7 +13,9 @@ use winterfell::{
     Proof, ProofOptions, Prover, Trace, VerifierError,
 };
 
-use crate::{Blake3_192, Blake3_256, Example, ExampleOptions, HashFunction, Sha3_256};
+use crate::{
+    input_data::DataMode, Blake3_192, Blake3_256, Example, ExampleOptions, HashFunction, Sha3_256,
+};
 
 mod air;
 use air::{MatrixMulAir, PublicInputs};
@@ -38,18 +39,22 @@ pub fn get_example(
     matrix_size: usize,
 ) -> Result<Box<dyn Example>, String> {
     let profile = options.profile_enabled();
+    let mode = options.data_mode();
     let (options, hash_fn) = options.to_proof_options(28, 8);
 
     match hash_fn {
-        HashFunction::Blake3_192 => {
-            Ok(Box::new(MatrixMulExample::<Blake3_192>::new(matrix_size, options, profile)))
-        },
-        HashFunction::Blake3_256 => {
-            Ok(Box::new(MatrixMulExample::<Blake3_256>::new(matrix_size, options, profile)))
-        },
-        HashFunction::Sha3_256 => {
-            Ok(Box::new(MatrixMulExample::<Sha3_256>::new(matrix_size, options, profile)))
-        },
+        HashFunction::Blake3_192 => Ok(Box::new(
+            MatrixMulExample::<Blake3_192>::new_with_data_mode(matrix_size, options, profile, mode),
+        )),
+        HashFunction::Blake3_256 => Ok(Box::new(
+            MatrixMulExample::<Blake3_256>::new_with_data_mode(matrix_size, options, profile, mode),
+        )),
+        HashFunction::Sha3_256 => Ok(Box::new(MatrixMulExample::<Sha3_256>::new_with_data_mode(
+            matrix_size,
+            options,
+            profile,
+            mode,
+        ))),
         _ => Err("The specified hash function cannot be used with this example.".to_string()),
     }
 }
@@ -66,12 +71,29 @@ pub struct MatrixMulExample<H: ElementHasher> {
 
 impl<H: ElementHasher> MatrixMulExample<H> {
     pub fn new(matrix_size: usize, options: ProofOptions, profile: bool) -> Self {
+        Self::new_with_data_mode(matrix_size, options, profile, DataMode::Dense)
+    }
+
+    pub fn new_with_data_mode(
+        matrix_size: usize,
+        options: ProofOptions,
+        profile: bool,
+        mode: DataMode,
+    ) -> Self {
         assert!(matrix_size.is_power_of_two(), "matrix size must be a power of 2");
         assert!(matrix_size >= 2, "matrix size must be at least 2");
 
         let input_start = Instant::now();
-        let a = build_matrix(matrix_size);
-        let b = build_matrix(matrix_size);
+        let square = matrix_size.checked_mul(matrix_size).expect("matrix size overflow");
+        square.checked_mul(matrix_size).expect("matrix trace length overflow");
+        let values = mode.generate(square.checked_mul(2).expect("matrix input count overflow"));
+        let a: Vec<BaseElement> = values.iter().step_by(2).copied().collect();
+        let b: Vec<BaseElement> = values.iter().skip(1).step_by(2).copied().collect();
+        println!(
+            "Data mode: {mode} ({} inputs, {} zeros)",
+            values.len(),
+            values.iter().filter(|&&value| value == BaseElement::ZERO).count()
+        );
         if profile {
             println!(
                 "[profile] stark.matmul.input_generation = {:.3} ms",
@@ -186,14 +208,6 @@ where
 
 // HELPER FUNCTIONS
 // ================================================================================================
-
-/// Builds an `n x n` matrix (in row-major order) filled with random field elements.
-///
-/// Random values are used to ensure the trace columns attain the maximum possible polynomial
-/// degree (in the same way as the Merkle and Lamport+ examples).
-fn build_matrix(n: usize) -> Vec<BaseElement> {
-    rand_vector(n * n)
-}
 
 /// Computes the product of two `n x n` matrices stored in row-major order.
 fn multiply(a: &[BaseElement], b: &[BaseElement], n: usize) -> Vec<BaseElement> {

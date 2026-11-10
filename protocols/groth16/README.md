@@ -19,13 +19,25 @@ CPU、CUDA 和 HIP 从构建到验证的完整命令统一维护在仓库根目�
 
 ## 支持的电路
 
-`groth16-gen` 当前支持矩阵乘法、Poseidon hash 和可验证 SQL 聚合：
+`groth16-gen` 当前支持矩阵乘法、Fibonacci、Poseidon hash 和可验证 SQL 聚合：
 
 ```bash
 groth16-gen matmul <matrix-size>
+groth16-gen fibonacci <steps>
 groth16-gen poseidon [count]
 groth16-gen sql-aggregate <rows>
 ```
+
+四个电路均可添加 `--data-mode dense|sparse|hybrid`。默认 dense 全部使用随机非零
+输入；sparse 将一半输入随机置零；hybrid 将前半段设为 dense、后半段设为 sparse。
+模式只影响原始输入，派生见证照常计算。非 dense 文件名前缀追加 `_sparse` 或
+`_hybrid`，具体布局、取整规则和调用示例见根目录 README 的“电路输入数据模式”。
+
+Fibonacci 从两个公开种子 `F0, F1` 开始，递推 `Fi = F(i-2) + F(i-1)`，
+并将 `F_steps` 作为第三个公开输入，所有中间项为私有见证。`steps >= 2`，
+含义与 PLONK 一致：`fibonacci 16` 计算 `F16`，包含两个种子在内共 17 项。
+数据模式仅作用于两个种子，因此 sparse 恰有一个零，hybrid 因取整没有零。
+每步加法和最终结果均由 R1CS 约束绑定，见证由同一递推计算。
 
 Poseidon 使用 BN254 标量域上的 `x^5`、`t=3`、`R_F=8`、`R_P=57`
 参数，二输入哈希定义为 `Poseidon([0, left, right])[0]`。每个实例将左右

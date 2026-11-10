@@ -21,9 +21,22 @@ use winterfell::Proof;
 // ================================================================================================
 
 fn main() {
+    let program_start = Instant::now();
     // Read command-line args before configuring tracing so --profile can
     // control detailed protocol output without requiring an environment variable.
     let options = ExampleOptions::from_args();
+    if options.data_mode() != examples::input_data::DataMode::Dense {
+        let supports_data_mode = match &options.example {
+            ExampleType::Fib { .. } => true,
+            #[cfg(feature = "std")]
+            ExampleType::MatrixMul { .. } => true,
+            _ => false,
+        };
+        if !supports_data_mode {
+            eprintln!("--data-mode is supported only for matrix-mul (matmul) and fib (fibonacci)");
+            std::process::exit(1);
+        }
+    }
 
     // configure logging
     if std::env::var("WINTER_LOG").is_err() {
@@ -123,8 +136,17 @@ fn main() {
     let parsed_proof = Proof::from_bytes(&proof_bytes).unwrap();
     assert_eq!(proof, parsed_proof);
     let now = Instant::now();
-    match example.verify(proof) {
+    match example.verify(parsed_proof) {
         Ok(_) => println!("Proof verified in {:.1} ms", now.elapsed().as_micros() as f64 / 1000f64),
-        Err(msg) => println!("Failed to verify proof: {msg}"),
+        Err(msg) => {
+            eprintln!("Failed to verify proof: {msg}");
+            std::process::exit(1);
+        },
+    }
+    if options.profile_enabled() {
+        println!(
+            "[profile] stark.program_total = {:.3} ms",
+            program_start.elapsed().as_secs_f64() * 1000.0
+        );
     }
 }

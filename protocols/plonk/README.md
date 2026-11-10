@@ -81,7 +81,18 @@ CUDA Setup 当前有意委托 CPU Setup，不在 GPU 上生成 SRS；NTT 幂表�
 
 与 Groth16 一样，PLONK 始终使用同名的四个统一程序，不为不同后端分别生成可执行文件。CPU 构建支持 `--backend cpu`；CUDA 构建支持 `cpu/cuda`；HIP 构建支持 `cpu/hip`。HIP Setup 与 CUDA Setup 一样复用 CPU 实现，HIP Prove 使用不依赖 warp shuffle 和 cooperative groups 的 DCU 安全算子。`plonk-gen` 和 `plonk-verify` 不接收 `--backend`。
 
-`plonk-gen` 目前支持 `matmul` 与 `fibonacci` 两种用例；`plonk-setup` 在未提供 `--srs` 时现场生成并写出 SRS。下面给出两种电路的完整 CPU 命令，其中第二次 Setup 复用第一次生成的 SRS：
+`plonk-gen` 目前支持 `matmul` 与 `fibonacci` 两种用例，两者都可添加
+`--data-mode dense|sparse|hybrid`（默认 dense）。dense 为全部随机非零输入，sparse
+为一半随机非零、一半零（位置随机），hybrid 为前半段 dense、后半段 sparse，
+各 sparse 段的零数量向下取整。矩阵输入交错展开为 `A[i], B[i]`；Fibonacci
+只采样两个种子，因此 sparse 恰有一个零，而 hybrid 经取整后没有零。中间项和
+公开结果正常计算，不要求整个 witness 满足输入零比例。
+
+dense 保留原文件名，sparse/hybrid 分别追加 `_sparse`/`_hybrid`，例如
+`plonk-gen --data-mode sparse fibonacci 10` 生成 `fibonacci_10_sparse.bin` 和
+`fibonacci_10_sparse.witness.bin`，后续程序使用同一前缀。
+
+`plonk-setup` 在未提供 `--srs` 时现场生成并写出 SRS。下面给出两种电路的完整 CPU 命令，其中第二次 Setup 复用第一次生成的 SRS：
 
 ```bash
 make plonk-cpu
@@ -133,3 +144,27 @@ make plonk-test-hip PROFILE=1 HIP_ARCH=<gfx-arch> PLONK_HIP_MATRIX_SIZE=79
 ```
 
 上述命令使用独立的 `build/plonk` 构建树，默认产物目录为 `build/plonk/data`。与 Groth16 相同，`setup`、`prove` 和 `verify` 可用 `--path <dir>` 覆盖该目录；使用默认值时无需传入。自动生成 SRS 使用 libff 的 `random_element()`，适合本地开发和功能验证；它不是多方可信设置，不能直接作为生产环境的通用 SRS。带 profile 的 CPU 回归可执行 `make plonk-test-cpu PROFILE=1 PLONK_CPU_MATRIX_SIZE=79`。
+
+## 数据模式回归
+
+在仓库根目录、已安装 GMP 的 Conda 环境下提交 Slurm 作业：
+
+```bash
+conda activate yuki
+sbatch scripts/test-plonk-data-modes.sh
+sbatch --gres=gpu:1 --export=ALL,PLONK_MODES_ACCELERATOR=CUDA scripts/test-plonk-data-modes.sh
+sbatch --gres=gpu:1 --export=ALL,PLONK_MODES_ACCELERATOR=HIP scripts/test-plonk-data-modes.sh
+```
+
+三条命令分别测试 CPU、CUDA 和 HIP，只运行所选后端。CUDA 在作业内
+`module load cuda/12.9`，默认架构为 `90`，可用 `CUDA_MODULE` 和 `CUDA_ARCH` 覆盖。
+HIP 需在 AMD GPU/DCU 节点运行，并事先配置 HIP/ROCm 工具链；也可设置
+`HIP_MODULE` 让作业加载本机实际模块名，设置 `HIP_ARCH` 指定目标 `gfx...` 架构。
+省略 `HIP_ARCH` 时使用 CMake 默认探测；分区及 `--gres` 需按目标集群调整。
+构建和产物位于 `/tmp/plonk-data-modes-<job-id>`，日志默认写入 `slurm-<job-id>.out`。
+脚本默认使用 4 个 CPU 线程。现有并行 MSM 对某些小规模输入在 8 线程下有分块越界
+问题（`operators/include/nkr/operators/variable_base_msm.hpp`），因此此回归不采用 8 线程。
+
+两类电路的三种模式均使用规模 4，每个组合仅执行一遍
+`gen → setup → prove → verify`，四阶段均开启 `--profile`，总计 6 组完整流程。
+不额外运行单元测试、非法参数测试、其他规模或 Groth16 测试，也不重复运行 CPU。

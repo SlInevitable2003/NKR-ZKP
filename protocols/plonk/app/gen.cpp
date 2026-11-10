@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "input_data.hpp"
 #include "plonk/io.hpp"
 #include "plonkish/arithmetization.hpp"
 #include "profile.hpp"
@@ -20,6 +21,11 @@ using Scalar = nkr::plonk::Scalar;
 
 static size_t parse_size(const string &text)
 {
+    if (text.empty()) throw invalid_argument("invalid positive size: " + text);
+    for (const char character : text) {
+        if (character < '0' || character > '9')
+            throw invalid_argument("invalid positive size: " + text);
+    }
     size_t consumed = 0;
     const unsigned long long parsed = stoull(text, &consumed);
     if (consumed != text.size() || parsed == 0 ||
@@ -36,7 +42,7 @@ static size_t checked_product(const size_t lhs, const size_t rhs)
     return lhs * rhs;
 }
 
-static void build_matmul(PlonkishManager &mgr, const size_t s)
+static void build_matmul(PlonkishManager &mgr, const size_t s, const nkr::DataMode mode)
 {
     const size_t square = checked_product(s, s);
     const size_t cube = checked_product(square, s);
@@ -46,10 +52,11 @@ static void build_matmul(PlonkishManager &mgr, const size_t s)
     }
 
     vector<Scalar> av(square), bv(square);
+    const nkr::InputSampler sampler(checked_product(2, square), mode);
     #pragma omp parallel for
     for (size_t i = 0; i < square; ++i) {
-        av[i] = Scalar::random_element();
-        bv[i] = Scalar::random_element();
+        av[i] = sampler.sample<Scalar>(2 * i, [] { return Scalar::random_element(); });
+        bv[i] = sampler.sample<Scalar>(2 * i + 1, [] { return Scalar::random_element(); });
     }
 
     vector<Scalar> cv(square, Scalar::zero()), pv(cube);
@@ -84,11 +91,14 @@ static void build_matmul(PlonkishManager &mgr, const size_t s)
     }
 }
 
-static void build_fibonacci(PlonkishManager &mgr, const size_t steps)
+static void build_fibonacci(PlonkishManager &mgr, const size_t steps, const nkr::DataMode mode)
 {
     if (steps < 2) throw invalid_argument("fibonacci steps must be at least 2");
-    const Scalar first_value = Scalar::random_element();
-    const Scalar second_value = Scalar::random_element();
+    if (steps > Variable::invalid_index - 2)
+        throw overflow_error("fibonacci circuit exceeds the PLONK variable index space");
+    const nkr::InputSampler sampler(2, mode);
+    const Scalar first_value = sampler.sample<Scalar>(0, [] { return Scalar::random_element(); });
+    const Scalar second_value = sampler.sample<Scalar>(1, [] { return Scalar::random_element(); });
     Scalar previous_value = first_value;
     Scalar current_value = second_value;
     for (size_t step = 2; step <= steps; ++step) {
@@ -109,21 +119,35 @@ static void build_fibonacci(PlonkishManager &mgr, const size_t steps)
 }
 
 static void usage(const char *prog) {
-    cerr << "Usage: " << prog << " [--profile] <case> [params...]\n"
+    cerr << "Usage: " << prog
+         << " [--profile] [--data-mode dense|sparse|hybrid] <case> [params...]\n"
          << "  cases:\n"
          << "    matmul <size>      matrix multiplication of dimension <size>\n"
          << "    fibonacci <steps>  Fibonacci recurrence with <steps> >= 2\n"
+         << "  data modes (original inputs only, not derived trace values):\n"
+         << "    dense (default)    all inputs are random nonzero values\n"
+         << "    sparse             half of the inputs are zero, at shuffled positions\n"
+         << "    hybrid             first half dense, second half sparse\n"
+         << "                       zero counts round down for odd-sized regions\n"
+         << "                       Fibonacci has only two seeds: hybrid has no zeros\n"
          << "  Outputs (in " APP_DATA_DIR "):\n"
+         << "    sparse/hybrid append _<mode> to the default case/size stem\n"
          << "    <stem>.bin         PLONK circuit\n"
          << "    <stem>.witness.bin satisfying execution trace\n";
     exit(1);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) try {
     bool profile = false;
+    nkr::DataMode mode = nkr::DataMode::Dense;
     vector<string> arguments;
     for (int i = 1; i < argc; ++i) {
         if (string(argv[i]) == "--profile") profile = true;
+        else if (string(argv[i]) == "--data-mode") {
+            if (i + 1 == argc) throw invalid_argument("--data-mode requires a value");
+            mode = nkr::parse_data_mode(argv[++i]);
+        }
+        else if (string(argv[i]).rfind("-", 0) == 0) usage(argv[0]);
         else arguments.emplace_back(argv[i]);
     }
     if (arguments.empty()) usage(argv[0]);
@@ -137,25 +161,28 @@ int main(int argc, char *argv[]) {
     string stem;
 
     if (case_name == "matmul") {
-        if (arguments.size() < 2) usage(argv[0]);
+        if (arguments.size() != 2) usage(argv[0]);
         const size_t s = parse_size(arguments[1]);
         {
             nkr::ProfileScope stage("plonk.gen.build_matmul");
-            build_matmul(mgr, s);
+            build_matmul(mgr, s, mode);
         }
         stem = "matmul_" + to_string(s);
     } else if (case_name == "fibonacci") {
-        if (arguments.size() < 2) usage(argv[0]);
+        if (arguments.size() != 2) usage(argv[0]);
         const size_t steps = parse_size(arguments[1]);
         {
             nkr::ProfileScope stage("plonk.gen.build_fibonacci");
-            build_fibonacci(mgr, steps);
+            build_fibonacci(mgr, steps, mode);
         }
         stem = "fibonacci_" + to_string(steps);
     } else {
         cerr << "Unknown case: " << case_name << "\n";
         usage(argv[0]);
     }
+    if (mode != nkr::DataMode::Dense)
+        stem += "_" + string(nkr::data_mode_name(mode));
+    cout << "Data mode: " << nkr::data_mode_name(mode) << '\n';
 
     Arithmetization out;
     {
@@ -184,4 +211,7 @@ int main(int argc, char *argv[]) {
     cout << "Wrote witness to " << paths.witness << endl;
 
     return 0;
+} catch (const exception &error) {
+    cerr << "gen: " << error.what() << '\n';
+    return 1;
 }

@@ -31,6 +31,10 @@ add_executable(groth16-sql-aggregate-test EXCLUDE_FROM_ALL
     tests/sql_aggregate_test.cpp)
 target_link_libraries(groth16-sql-aggregate-test PRIVATE nkr_groth16_common)
 
+add_executable(groth16-gen-data-test EXCLUDE_FROM_ALL
+    tests/gen_data_test.cpp)
+target_link_libraries(groth16-gen-data-test PRIVATE nkr_groth16_common)
+
 set(NKR_ZKP_GROTH16_ACCELERATOR_TARGET "")
 if(NKR_ZKP_ACCELERATOR STREQUAL "CUDA")
     add_subdirectory(backends/cuda)

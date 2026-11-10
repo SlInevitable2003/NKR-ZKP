@@ -4,7 +4,8 @@
 // LICENSE file in the root directory of this source tree.
 
 use winterfell::{
-    Air, AirContext, Assertion, EvaluationFrame, TraceInfo, TransitionConstraintDegree,
+    math::ToElements, Air, AirContext, Assertion, EvaluationFrame, TraceInfo,
+    TransitionConstraintDegree,
 };
 
 use super::{BaseElement, FieldElement, ProofOptions, TRACE_WIDTH};
@@ -15,21 +16,33 @@ use crate::utils::are_equal;
 
 pub struct FibAir {
     context: AirContext<BaseElement>,
-    result: BaseElement,
+    inputs: PublicInputs,
+}
+
+#[derive(Clone)]
+pub struct PublicInputs {
+    pub seeds: [BaseElement; 2],
+    pub result: BaseElement,
+}
+
+impl ToElements<BaseElement> for PublicInputs {
+    fn to_elements(&self) -> Vec<BaseElement> {
+        vec![self.seeds[0], self.seeds[1], self.result]
+    }
 }
 
 impl Air for FibAir {
     type BaseField = BaseElement;
-    type PublicInputs = BaseElement;
+    type PublicInputs = PublicInputs;
 
     // CONSTRUCTOR
     // --------------------------------------------------------------------------------------------
-    fn new(trace_info: TraceInfo, pub_inputs: Self::BaseField, options: ProofOptions) -> Self {
+    fn new(trace_info: TraceInfo, pub_inputs: PublicInputs, options: ProofOptions) -> Self {
         let degrees = vec![TransitionConstraintDegree::new(1), TransitionConstraintDegree::new(1)];
         assert_eq!(TRACE_WIDTH, trace_info.width());
         FibAir {
             context: AirContext::new(trace_info, degrees, 3, options),
-            result: pub_inputs,
+            inputs: pub_inputs,
         }
     }
 
@@ -57,13 +70,11 @@ impl Air for FibAir {
     }
 
     fn get_assertions(&self) -> Vec<Assertion<Self::BaseField>> {
-        // a valid Fibonacci sequence should start with two ones and terminate with
-        // the expected result
         let last_step = self.trace_length() - 1;
         vec![
-            Assertion::single(0, 0, Self::BaseField::ONE),
-            Assertion::single(1, 0, Self::BaseField::ONE),
-            Assertion::single(1, last_step, self.result),
+            Assertion::single(0, 0, self.inputs.seeds[0]),
+            Assertion::single(1, 0, self.inputs.seeds[1]),
+            Assertion::single(1, last_step, self.inputs.result),
         ]
     }
 }

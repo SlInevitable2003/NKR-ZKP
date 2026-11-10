@@ -11,6 +11,7 @@ use winterfell::{
 };
 
 pub mod fibonacci;
+pub mod input_data;
 #[cfg(feature = "std")]
 pub mod lamport;
 #[cfg(feature = "std")]
@@ -52,6 +53,10 @@ pub struct ExampleOptions {
     #[structopt(long, global = true)]
     profile: bool,
 
+    /// Input values: dense (default), sparse, or hybrid (matrix-mul and fib only)
+    #[structopt(long = "data-mode", global = true)]
+    data_mode: Option<input_data::DataMode>,
+
     /// Hash function used in the protocol
     #[structopt(short = "h", long = "hash_fn", default_value = "blake3_256")]
     hash_fn: String,
@@ -78,6 +83,10 @@ pub struct ExampleOptions {
 }
 
 impl ExampleOptions {
+    pub fn data_mode(&self) -> input_data::DataMode {
+        self.data_mode.unwrap_or_default()
+    }
+
     pub fn profile_enabled(&self) -> bool {
         self.profile
     }
@@ -149,6 +158,7 @@ impl ExampleOptions {
 //#[structopt(about = "available examples")]
 pub enum ExampleType {
     /// Compute a Fibonacci sequence using trace table with 2 registers
+    #[structopt(alias = "fibonacci")]
     Fib {
         /// Length of Fibonacci sequence; must be a power of two
         #[structopt(short = "n", default_value = "1048576")]
@@ -180,6 +190,7 @@ pub enum ExampleType {
     },
     /// Compute a matrix multiplication of two matrices
     #[cfg(feature = "std")]
+    #[structopt(alias = "matmul")]
     MatrixMul {
         /// Dimension of the two square matrices; must be a power of two and at least 2
         #[structopt(short = "n", default_value = "8")]
