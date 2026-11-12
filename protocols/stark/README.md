@@ -32,11 +32,11 @@ protocols/stark/winterfell/target/release/winterfell
 protocols/stark/winterfell/target/release/winterfell --help
 ```
 
-`matrix-mul` 和 `poseidon` 支持 `--density full|hybrid|sparse`（默认 `full`）：
+`matrix-mul`、`poseidon` 和 `sql` 支持 `--density full|hybrid|sparse`（默认 `full`）：
 `full` 使用 100% 随机非零输入，`hybrid` 保留 50%，`sparse` 保留 10%，其余置零
 并随机打散。`matrix-mul` 对 A、B 各 `n²` 个元素独立采样，`poseidon` 对
-`2 × 哈希数` 个输入独立采样；`make stark-matmul` 可通过 `DENSITY=sparse` 传入。
-其他示例传入非 `full` 值会报错。
+`2 × 哈希数` 个输入独立采样，`sql` 只对 amount 列采样；`make stark-matmul`
+可通过 `DENSITY=sparse` 传入。其他示例传入非 `full` 值会报错。
 
 Poseidon 示例：
 
@@ -49,7 +49,19 @@ protocols/stark/winterfell/target/release/winterfell \
 （`x^5`、`t=3`、`R_F=8`、`R_P=57`，round constants 由 Grain LFSR 生成，MDS 为
 Cauchy 矩阵），摘要值与 BN254 的 Groth16/PLONK 电路不同。
 
-除 `matrix-mul` 外，workspace 还包含 Fibonacci、Poseidon、乘法 Fibonacci、VDF、
+SQL 聚合示例：
+
+```bash
+protocols/stark/winterfell/target/release/winterfell \
+  sql -n 4 --density sparse --profile
+```
+
+`-n` 为表行数（2 的幂且不小于 2）。私有表按行顺序用 Poseidon 哈希链承诺
+（`chain_i = H(chain_{i-1}, H(category_i, amount_i))`），公开输入为 target、
+COUNT、SUM 和链摘要。STARK 版本按 f128 域元素聚合，不额外做 UINT32 分解；
+`--density` 只作用于 amount 列。
+
+除 `matrix-mul` 外，workspace 还包含 Fibonacci、Poseidon、SQL 聚合、乘法 Fibonacci、VDF、
 Rescue、随机化 AIR、Merkle membership 和 Lamport+ signature 等示例。
 
 ## 安全边界

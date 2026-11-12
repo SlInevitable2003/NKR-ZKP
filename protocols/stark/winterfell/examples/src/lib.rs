@@ -22,6 +22,8 @@ pub mod poseidon;
 pub mod rescue;
 #[cfg(feature = "std")]
 pub mod rescue_raps;
+#[cfg(feature = "std")]
+pub mod sql;
 pub mod utils;
 pub mod vdf;
 
@@ -187,6 +189,13 @@ pub enum ExampleType {
         /// Length of Fibonacci sequence; must be a power of two
         #[structopt(short = "n", default_value = "65536")]
         sequence_length: usize,
+    },
+    /// Verify COUNT/SUM over a private table committed by a Poseidon hash chain
+    #[cfg(feature = "std")]
+    Sql {
+        /// Number of table rows; must be a power of two and at least 2
+        #[structopt(short = "n", default_value = "4")]
+        num_rows: usize,
     },
     /// Compute Poseidon hashes over two-element inputs
     Poseidon {

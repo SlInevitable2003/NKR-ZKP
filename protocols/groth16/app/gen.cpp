@@ -163,20 +163,22 @@ static void build_poseidon(R1CSManager<FieldT> &mgr,
 
 static void build_sql_aggregate(R1CSManager<FieldT> &mgr,
                                 map<size_t, FieldT> &assignment,
-                                const size_t row_count)
+                                const size_t row_count, const nkr::Density density)
 {
     if (row_count < 2 || !SqlAggregate::is_power_of_two(row_count))
         throw invalid_argument("SQL row count must be a power of two and at least 2");
 
     vector<SqlAggregate::Row<FieldT>> rows;
     rows.reserve(row_count);
+    const nkr::DensitySampler sampler(row_count, density);
     for (size_t i = 0; i < row_count; ++i) {
         const uint32_t category =
             static_cast<uint32_t>(FieldT::random_element().as_ulong() % 16);
-        const uint32_t amount =
-            static_cast<uint32_t>(FieldT::random_element().as_ulong());
-        rows.push_back({FieldT(static_cast<long>(category)),
-                        FieldT(static_cast<long>(amount))});
+        const FieldT amount = sampler.sample<FieldT>(i, [] {
+            return FieldT(static_cast<long>(
+                static_cast<uint32_t>(FieldT::random_element().as_ulong())));
+        });
+        rows.push_back({FieldT(static_cast<long>(category)), amount});
     }
     const FieldT target_value = rows.front().category;
     const auto result = SqlAggregate::evaluate(rows, target_value);
@@ -202,15 +204,16 @@ static void usage(const char *prog) {
          << "    fibonacci <steps>  compute F_steps from public F0 and F1; steps >= 2\n"
          << "    poseidon [count]   <count> independent private-input Poseidon hashes\n"
          << "    sql-aggregate <rows>  verify COUNT/SUM over a committed private table\n"
-         << "  input density (matmul and poseidon, default full):\n"
+         << "  input density (matmul, poseidon and sql-aggregate; default full):\n"
          << "    full    100% of the input entries are random nonzero values\n"
          << "    hybrid  50% of the input entries are random nonzero values\n"
          << "    sparse  10% of the input entries are random nonzero values\n"
+         << "    sql-aggregate applies the density to the amount column only\n"
          << "    zero positions are shuffled; nonzero counts are ceil(N * density)\n"
          << "  Outputs (in " APP_DATA_DIR "):\n"
          << "    <stem>.bin         R1CS (k, num_cols, A, B, C)\n"
          << "    <stem>.witness.bin satisfying witness z (size num_cols)\n"
-         << "    hybrid/sparse matmul and poseidon append _<density> to the default stem\n";
+         << "    hybrid/sparse matmul, poseidon and sql-aggregate append _<density>\n";
     exit(1);
 }
 
@@ -236,8 +239,9 @@ int main(int argc, char *argv[]) try {
     const string case_name = arguments[0];
 
     if (density != nkr::Density::Full && case_name != "matmul" &&
-        case_name != "poseidon")
-        throw invalid_argument("--density is supported only for matmul and poseidon");
+        case_name != "poseidon" && case_name != "sql-aggregate")
+        throw invalid_argument(
+            "--density is supported only for matmul, poseidon and sql-aggregate");
 
     R1CSManager<FieldT> mgr;
     map<size_t, FieldT> assignment;
@@ -286,9 +290,14 @@ int main(int argc, char *argv[]) try {
         const size_t rows = parse_positive_size(arguments[1]);
         {
             nkr::ProfileScope stage("groth16.gen.build_sql_aggregate");
-            build_sql_aggregate(mgr, assignment, rows);
+            build_sql_aggregate(mgr, assignment, rows, density);
         }
         stem = "sql_aggregate_" + to_string(rows);
+        if (density != nkr::Density::Full)
+            stem += "_" + string(nkr::density_name(density));
+        const size_t nonzero = nkr::density_nonzero_count(rows, density);
+        cout << "Density: " << nkr::density_name(density)
+             << " (amounts: " << nonzero << "/" << rows << " nonzero)\n";
     } else {
         cerr << "Unknown case: " << case_name << "\n";
         usage(argv[0]);

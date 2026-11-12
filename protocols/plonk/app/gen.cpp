@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -10,7 +11,9 @@
 #include "plonk/io.hpp"
 #include "plonkish/arithmetization.hpp"
 #include "plonkish/poseidon.hpp"
+#include "plonkish/sql_aggregate.hpp"
 #include "profile.hpp"
+#include "sql_query.hpp"
 
 using namespace std;
 using namespace Plonkish;
@@ -105,6 +108,36 @@ static void build_poseidon(PlonkishManager &mgr, const size_t count,
     }
 }
 
+static void build_sql_aggregate(PlonkishManager &mgr, const size_t row_count,
+                                 const nkr::Density density)
+{
+    if (row_count < 2 || !nkr::sql::is_power_of_two(row_count))
+        throw invalid_argument("SQL row count must be a power of two and at least 2");
+
+    vector<nkr::sql::Row<Scalar>> rows;
+    rows.reserve(row_count);
+    const nkr::DensitySampler sampler(row_count, density);
+    for (size_t i = 0; i < row_count; ++i) {
+        const uint32_t category =
+            static_cast<uint32_t>(Scalar::random_element().as_ulong() % 16);
+        const Scalar amount = sampler.sample<Scalar>(i, [] {
+            return Scalar(static_cast<long>(
+                static_cast<uint32_t>(Scalar::random_element().as_ulong())));
+        });
+        rows.push_back({Scalar(static_cast<long>(category)), amount});
+    }
+
+    const Scalar target_value = rows.front().category;
+    const auto result = nkr::sql::evaluate(rows, target_value);
+
+    const Variable table_root = mgr.public_variable(result.table_root);
+    const Variable target_category = mgr.public_variable(target_value);
+    const Variable expected_count = mgr.public_variable(result.count);
+    const Variable expected_sum = mgr.public_variable(result.sum);
+    SqlAggregate::add_query_constraints(mgr, rows, table_root, target_category,
+                                        target_value, expected_count, expected_sum);
+}
+
 static void build_fibonacci(PlonkishManager &mgr, const size_t steps)
 {
     if (steps < 2) throw invalid_argument("fibonacci steps must be at least 2");
@@ -136,15 +169,17 @@ static void usage(const char *prog) {
          << "    matmul <size>      matrix multiplication of dimension <size>\n"
          << "    fibonacci <steps>  Fibonacci recurrence with <steps> >= 2\n"
          << "    poseidon [count]   <count> independent private-input Poseidon hashes\n"
-         << "  input density (matmul and poseidon, default full):\n"
+         << "    sql-aggregate <rows>  verify COUNT/SUM over a committed private table\n"
+         << "  input density (matmul, poseidon and sql-aggregate; default full):\n"
          << "    full    100% of the input entries are random nonzero values\n"
          << "    hybrid  50% of the input entries are random nonzero values\n"
          << "    sparse  10% of the input entries are random nonzero values\n"
+         << "    sql-aggregate applies the density to the amount column only\n"
          << "    zero positions are shuffled; nonzero counts are ceil(N * density)\n"
          << "  Outputs (in " APP_DATA_DIR "):\n"
          << "    <stem>.bin         PLONK circuit\n"
          << "    <stem>.witness.bin satisfying execution trace\n"
-         << "    hybrid/sparse matmul and poseidon append _<density> to the default stem\n";
+         << "    hybrid/sparse matmul, poseidon and sql-aggregate append _<density>\n";
     exit(1);
 }
 
@@ -170,8 +205,9 @@ int main(int argc, char *argv[]) try {
     const string case_name = arguments[0];
 
     if (density != nkr::Density::Full && case_name != "matmul" &&
-        case_name != "poseidon")
-        throw invalid_argument("--density is supported only for matmul and poseidon");
+        case_name != "poseidon" && case_name != "sql-aggregate")
+        throw invalid_argument(
+            "--density is supported only for matmul, poseidon and sql-aggregate");
 
     PlonkishManager mgr;
     string stem;
@@ -212,6 +248,19 @@ int main(int argc, char *argv[]) try {
         const size_t nonzero = nkr::density_nonzero_count(entries, density);
         cout << "Density: " << nkr::density_name(density)
              << " (inputs: " << nonzero << "/" << entries << " nonzero)\n";
+    } else if (case_name == "sql-aggregate") {
+        if (arguments.size() < 2) usage(argv[0]);
+        const size_t rows = parse_size(arguments[1]);
+        {
+            nkr::ProfileScope stage("plonk.gen.build_sql_aggregate");
+            build_sql_aggregate(mgr, rows, density);
+        }
+        stem = "sql_aggregate_" + to_string(rows);
+        if (density != nkr::Density::Full)
+            stem += "_" + string(nkr::density_name(density));
+        const size_t nonzero = nkr::density_nonzero_count(rows, density);
+        cout << "Density: " << nkr::density_name(density)
+             << " (amounts: " << nonzero << "/" << rows << " nonzero)\n";
     } else {
         cerr << "Unknown case: " << case_name << "\n";
         usage(argv[0]);

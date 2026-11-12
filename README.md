@@ -101,7 +101,7 @@ G16=build/groth16/bin
 
 ### 输入数据密度
 
-`groth16-gen` 的 `matmul` 和 `poseidon` 支持 `--density full|hybrid|sparse`，省略时为 `full`（值大小写不敏感）：
+`groth16-gen` 的 `matmul`、`poseidon` 和 `sql-aggregate` 支持 `--density full|hybrid|sparse`，省略时为 `full`（值大小写不敏感）：
 
 | 档位 | 非零元素占比 | 含义 |
 | --- | --- | --- |
@@ -109,7 +109,7 @@ G16=build/groth16/bin
 | `hybrid`（HYBRID） | 50% | 保留 `ceil(N/2)` 个随机非零值，其余置零 |
 | `sparse`（SPARSE） | 10% | 保留 `ceil(N/10)` 个随机非零值，其余置零 |
 
-`matmul` 中 `N = size²`，A、B 独立采样；`poseidon` 中 `N = 2 × count`，每个哈希的左右输入独立采样。零元素位置随机打散；密度只改变输入数据，不改变电路结构和约束。除 `full` 外的档位会在产物文件名后追加 `_hybrid` / `_sparse`：
+`matmul` 中 `N = size²`，A、B 独立采样；`poseidon` 中 `N = 2 × count`，每个哈希的左右输入独立采样；`sql-aggregate` 中 `N = rows`，密度只作用于 amount 列，category 保持 0..15 随机。零元素位置随机打散；密度只改变输入数据，不改变电路结构和约束。除 `full` 外的档位会在产物文件名后追加 `_hybrid` / `_sparse`：
 
 ```bash
 G16=build/groth16/bin
@@ -122,9 +122,14 @@ G16=build/groth16/bin
 "$G16/groth16-setup" --profile --backend cpu poseidon_8_hybrid.bin
 "$G16/groth16-prove" --profile --backend cpu poseidon_8_hybrid.bin
 "$G16/groth16-verify" --profile poseidon_8_hybrid.bin
+
+"$G16/groth16-gen" --profile --density sparse sql-aggregate 4
+"$G16/groth16-setup" --profile --backend cpu sql_aggregate_4_sparse.bin
+"$G16/groth16-prove" --profile --backend cpu sql_aggregate_4_sparse.bin
+"$G16/groth16-verify" --profile sql_aggregate_4_sparse.bin
 ```
 
-`--density` 只对 `matmul` 和 `poseidon` 生效；`fibonacci`、`sql-aggregate` 传入非 `full` 值会报错。
+`--density` 只对 `matmul`、`poseidon` 和 `sql-aggregate` 生效；`fibonacci` 传入非 `full` 值会报错。
 
 ### 使用 NVIDIA CUDA 后端
 
@@ -213,9 +218,21 @@ PLONK_BIN=build/plonk/bin
 "$PLONK_BIN/plonk-verify" --profile poseidon_2.bin
 ```
 
+### SQL 聚合电路
+
+`plonk-gen sql-aggregate <rows>` 实现与 Groth16 相同的固定查询（按 `category` 过滤后统计 COUNT/SUM）。私有表由 Poseidon Merkle root 绑定，`rows` 必须是不小于 2 的 2 的幂；公开输入为 root、target category、COUNT 和 SUM。
+
+```bash
+PLONK_BIN=build/plonk/bin
+"$PLONK_BIN/plonk-gen" --profile sql-aggregate 4
+"$PLONK_BIN/plonk-setup" --profile --backend cpu sql_aggregate_4.bin
+"$PLONK_BIN/plonk-prove" --profile --backend cpu sql_aggregate_4.bin
+"$PLONK_BIN/plonk-verify" --profile sql_aggregate_4.bin
+```
+
 ### 输入数据密度
 
-`plonk-gen` 的 `matmul` 和 `poseidon` 支持 `--density full|hybrid|sparse`（默认 `full`，值大小写不敏感），语义与 Groth16 一致：`full` 全部为随机非零值，`hybrid` 保留 50%，`sparse` 保留 10%；matmul 对 A、B 独立采样，poseidon 对 `2 × count` 个输入独立采样，零位置随机打散。非 `full` 档位的文件名追加 `_hybrid` / `_sparse`：
+`plonk-gen` 的 `matmul`、`poseidon` 和 `sql-aggregate` 支持 `--density full|hybrid|sparse`（默认 `full`，值大小写不敏感），语义与 Groth16 一致：`full` 全部为随机非零值，`hybrid` 保留 50%，`sparse` 保留 10%；matmul 对 A、B 独立采样，poseidon 对 `2 × count` 个输入独立采样，sql-aggregate 只对 amount 列采样（每行 1 个），零位置随机打散。非 `full` 档位的文件名追加 `_hybrid` / `_sparse`：
 
 ```bash
 PLONK_BIN=build/plonk/bin
@@ -225,9 +242,11 @@ PLONK_BIN=build/plonk/bin
 "$PLONK_BIN/plonk-verify" --profile matmul_79_sparse.bin
 
 "$PLONK_BIN/plonk-gen" --profile --density hybrid poseidon 4
+
+"$PLONK_BIN/plonk-gen" --profile --density sparse sql-aggregate 4
 ```
 
-`--density` 只对 `matmul` 和 `poseidon` 生效，`fibonacci` 不支持。
+`--density` 只对 `matmul`、`poseidon` 和 `sql-aggregate` 生效，`fibonacci` 不支持。
 
 ### 使用 NVIDIA CUDA 后端
 
@@ -353,9 +372,18 @@ protocols/stark/winterfell/target/release/winterfell \
 
 `poseidon` 的 `-n` 是哈希个数，必须为 2 的幂；STARK 版本使用 f128 域上的 Poseidon 参数（`x^5`、`t=3`、`R_F=8`、`R_P=57`，round constants 由 Grain LFSR 生成，MDS 为 Cauchy 矩阵），因此摘要值与 BN254 的 Groth16/PLONK 电路不同。
 
-`--density` 只对 `matrix-mul` 和 `poseidon` 生效；其他示例传入非 `full` 值会报错。
+SQL 聚合示例：
 
-示例程序还包含 Fibonacci、Poseidon、乘法 Fibonacci、VDF、Rescue hash chain、
+```bash
+protocols/stark/winterfell/target/release/winterfell \
+  sql -n 4 --density sparse --profile
+```
+
+`sql` 的 `-n` 是表行数（2 的幂且不小于 2）。私有表按行顺序用 Poseidon 哈希链承诺（`chain_i = H(chain_{i-1}, H(category_i, amount_i))`），公开输入为 target category、COUNT、SUM 和链摘要；STARK 版本按 f128 域元素聚合，不额外做 UINT32 分解，`--density` 只作用于 amount 列。
+
+`--density` 只对 `matrix-mul`、`poseidon` 和 `sql` 生效；其他示例传入非 `full` 值会报错。
+
+示例程序还包含 Fibonacci、Poseidon、SQL 聚合、乘法 Fibonacci、VDF、Rescue hash chain、
 随机化 AIR permutation、Merkle membership 和 Lamport+ signature 等 AIR。
 可通过 `--hash_fn`、`--queries`、`--blowup`、`--grinding`、
 `--field_extension` 与 `--folding` 调整证明参数；这些参数会影响证明时间、

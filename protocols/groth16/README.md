@@ -28,12 +28,13 @@ groth16-gen poseidon [count]
 groth16-gen sql-aggregate <rows>
 ```
 
-矩阵乘法和 Poseidon 支持 `--density full|hybrid|sparse`（默认 `full`）：`full`
-使用 100% 随机非零输入，`hybrid` 保留 50%，`sparse` 保留 10%，其余置零并随机
-打散。`matmul` 对 A、B 各 `N` 个元素独立采样；`poseidon` 对每个哈希的左右输入
-（共 `2 × count` 个）独立采样。非零个数为 `ceil(N × 密度)`，非 `full` 档位的
-产物文件名追加 `_hybrid` / `_sparse`。完整命令见根目录 README 的「Groth16 构建与
-运行」一节；该参数仅对 `matmul` 和 `poseidon` 生效，`fibonacci` 和 `sql-aggregate`
+矩阵乘法、Poseidon 和 SQL 聚合支持 `--density full|hybrid|sparse`（默认 `full`）：
+`full` 使用 100% 随机非零输入，`hybrid` 保留 50%，`sparse` 保留 10%，其余置零并
+随机打散。`matmul` 对 A、B 各 `N` 个元素独立采样；`poseidon` 对每个哈希的左右
+输入（共 `2 × count` 个）独立采样；`sql-aggregate` 只对每行 amount 采样，
+category 保持 0..15 随机。非零个数为 `ceil(N × 密度)`，非 `full` 档位的产物
+文件名追加 `_hybrid` / `_sparse`。完整命令见根目录 README 的「Groth16 构建与
+运行」一节；该参数仅对 `matmul`、`poseidon` 和 `sql-aggregate` 生效，`fibonacci`
 传入非 `full` 值会报错。
 
 Fibonacci 从两个公开种子 `F0, F1` 开始，递推 `Fi = F(i-2) + F(i-1)`，
@@ -57,7 +58,8 @@ WHERE category = :target_category;
 
 `category` 和 `amount` 都约束为 `UINT32`，不支持 NULL、字符串、JOIN、排序或
 任意 SQL 解析。`rows` 必须是不小于 2 的二次幂。1024 行会产生 969324 条
-原始约束，R1CS 行列均填充为 `2^20`。
+原始约束，R1CS 行列均填充为 `2^20`。`--density` 只把部分 amount 置零，
+category 保持随机；非 `full` 档位的产物文件名追加 `_hybrid` / `_sparse`。
 
 约束测试和 CPU 端到端回归可通过以下命令运行：
 

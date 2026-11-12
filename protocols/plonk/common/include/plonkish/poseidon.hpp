@@ -10,15 +10,18 @@
 namespace Plonkish::Poseidon {
 
 // Constrains digest = Poseidon([0, left, right])[0] and returns the digest as a
-// new public variable. left and right are existing variables (typically
-// private); all round intermediate variables are private.
-inline Variable add_hash2(PlonkishManager &manager, Variable left, Variable right)
+// new variable with the requested visibility. left and right are existing
+// variables (typically private); all round intermediate variables are private.
+inline Variable add_hash2(PlonkishManager &manager, Variable left, Variable right,
+                          const VariableVisibility visibility = VariableVisibility::Public)
 {
     using nkr::plonk::Scalar;
     const auto &parameters = nkr::poseidon::detail::parameters<Scalar>();
     const Scalar digest_value =
         nkr::poseidon::hash2<Scalar>(manager.value(left), manager.value(right));
-    const Variable digest = manager.public_variable(digest_value);
+    const Variable digest = visibility == VariableVisibility::Public
+        ? manager.public_variable(digest_value)
+        : manager.private_variable(digest_value);
 
     std::array<Variable, nkr::poseidon::WIDTH> state{
         manager.constant(Scalar::zero()),
