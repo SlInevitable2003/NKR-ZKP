@@ -19,10 +19,11 @@ CPU、CUDA 和 HIP 从构建到验证的完整命令统一维护在仓库根目�
 
 ## 支持的电路
 
-`groth16-gen` 当前支持矩阵乘法、Poseidon hash 和可验证 SQL 聚合：
+`groth16-gen` 当前支持矩阵乘法、Fibonacci、Poseidon hash 和可验证 SQL 聚合：
 
 ```bash
 groth16-gen matmul <matrix-size>
+groth16-gen fibonacci <steps>
 groth16-gen poseidon [count]
 groth16-gen sql-aggregate <rows>
 ```
@@ -31,7 +32,12 @@ groth16-gen sql-aggregate <rows>
 非零元素，`hybrid` 保留 50%，`sparse` 保留 10%，其余元素置零并在 A、B 内独立随机
 打散。非零个数为 `ceil(N × 密度)`，非 `full` 档位的产物文件名追加 `_hybrid` /
 `_sparse`。完整命令见根目录 README 的「Groth16 构建与运行」一节；该参数仅对
-`matmul` 生效，`poseidon` 和 `sql-aggregate` 传入非 `full` 值会报错。
+`matmul` 生效，`fibonacci`、`poseidon` 和 `sql-aggregate` 传入非 `full` 值会报错。
+
+Fibonacci 从两个公开种子 `F0, F1` 开始，递推 `Fi = F(i-2) + F(i-1)`，
+将 `F_steps` 作为第三个公开输入，所有中间项为私有见证。`steps` 必须不小于 2，
+见证由同一递推计算，每步加法和最终结果均由 R1CS 约束绑定；该电路不支持
+`--density`。
 
 Poseidon 使用 BN254 标量域上的 `x^5`、`t=3`、`R_F=8`、`R_P=57`
 参数，二输入哈希定义为 `Poseidon([0, left, right])[0]`。每个实例将左右

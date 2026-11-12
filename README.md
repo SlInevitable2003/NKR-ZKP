@@ -69,6 +69,19 @@ make groth16-clean
 make groth16-cpu
 
 G16=build/groth16/bin
+"$G16/groth16-gen" --profile fibonacci 16
+"$G16/groth16-setup" --profile --backend cpu fibonacci_16.bin
+"$G16/groth16-prove" --profile --backend cpu fibonacci_16.bin
+"$G16/groth16-verify" --profile fibonacci_16.bin
+```
+
+Fibonacci 电路以两个公开种子 `F0, F1` 为输入，`F_steps` 为公开输出，中间项为私有见证；`steps` 必须不小于 2，且该电路不支持 `--density`。
+
+```bash
+make groth16-clean
+make groth16-cpu
+
+G16=build/groth16/bin
 "$G16/groth16-gen" --profile poseidon 2377
 "$G16/groth16-setup" --profile --backend cpu poseidon_2377.bin
 "$G16/groth16-prove" --profile --backend cpu poseidon_2377.bin
@@ -106,7 +119,7 @@ G16=build/groth16/bin
 "$G16/groth16-verify" --profile matmul_100_sparse.bin
 ```
 
-`--density` 只对 `matmul` 生效；`poseidon` 和 `sql-aggregate` 传入非 `full` 值会报错。
+`--density` 只对 `matmul` 生效；`fibonacci`、`poseidon` 和 `sql-aggregate` 传入非 `full` 值会报错。
 
 ### 使用 NVIDIA CUDA 后端
 

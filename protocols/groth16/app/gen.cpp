@@ -85,6 +85,41 @@ static void build_matmul(R1CSManager<FieldT> &mgr, map<size_t, FieldT> &assignme
     }
 }
 
+static void build_fibonacci(R1CSManager<FieldT> &mgr, map<size_t, FieldT> &assignment,
+                            const size_t steps)
+{
+    if (steps < 2) throw invalid_argument("fibonacci steps must be at least 2");
+
+    // F0 and F1 are public seeds, F_steps is the public result, and every
+    // intermediate term is a private witness constrained by Fi = F(i-2) + F(i-1).
+    const FieldT first_value = FieldT::random_element();
+    const FieldT second_value = FieldT::random_element();
+
+    Variable<FieldT> previous(VariableType::Public, mgr);
+    Variable<FieldT> current(VariableType::Public, mgr);
+    const Variable<FieldT> expected(VariableType::Public, mgr);
+    assignment[previous.get_id()] = first_value;
+    assignment[current.get_id()] = second_value;
+
+    FieldT previous_value = first_value;
+    FieldT current_value = second_value;
+    for (size_t step = 2; step <= steps; ++step) {
+        const FieldT next_value = previous_value + current_value;
+        const Variable<FieldT> next(VariableType::Private, mgr);
+        LinearCombination<FieldT> sum(previous);
+        sum += current;
+        mgr.add_constraint(LinearCombination<FieldT>(next), sum);
+        assignment[next.get_id()] = next_value;
+        previous_value = current_value;
+        current_value = next_value;
+        previous = current;
+        current = next;
+    }
+
+    assignment[expected.get_id()] = current_value;
+    mgr.add_constraint(LinearCombination<FieldT>(expected), LinearCombination<FieldT>(current));
+}
+
 static size_t parse_positive_size(const string &text)
 {
     if (text.empty()) throw invalid_argument("invalid positive size: " + text);
@@ -161,6 +196,7 @@ static void usage(const char *prog) {
          << " [--profile] [--density full|hybrid|sparse] <case> [params...]\n"
          << "  cases:\n"
          << "    matmul <size>      matrix-multiplication R1CS of dimension <size>\n"
+         << "    fibonacci <steps>  compute F_steps from public F0 and F1; steps >= 2\n"
          << "    poseidon [count]   <count> independent private-input Poseidon hashes\n"
          << "    sql-aggregate <rows>  verify COUNT/SUM over a committed private table\n"
          << "  input density (matmul only, default full):\n"
@@ -218,6 +254,14 @@ int main(int argc, char *argv[]) try {
         cout << "Density: " << nkr::density_name(density)
              << " (A: " << nonzero << "/" << s * s << " nonzero, B: "
              << nonzero << "/" << s * s << " nonzero)\n";
+    } else if (case_name == "fibonacci") {
+        if (arguments.size() < 2) usage(argv[0]);
+        const size_t steps = parse_positive_size(arguments[1]);
+        {
+            nkr::ProfileScope stage("groth16.gen.build_fibonacci");
+            build_fibonacci(mgr, assignment, steps);
+        }
+        stem = "fibonacci_" + to_string(steps);
     } else if (case_name == "poseidon") {
         const size_t count = arguments.size() < 2 ? 1 : parse_positive_size(arguments[1]);
         {
