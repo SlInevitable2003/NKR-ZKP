@@ -9,19 +9,22 @@ use super::Blake3_256;
 
 #[test]
 fn matrixmul_test_basic_proof_verification() {
-    let example = Box::new(super::MatrixMulExample::<Blake3_256>::new(4, build_options(false)));
+    let example =
+        Box::new(super::MatrixMulExample::<Blake3_256>::new(4, build_options(false), false));
     crate::tests::test_basic_proof_verification(example);
 }
 
 #[test]
 fn matrixmul_test_basic_proof_verification_extension() {
-    let example = Box::new(super::MatrixMulExample::<Blake3_256>::new(4, build_options(true)));
+    let example =
+        Box::new(super::MatrixMulExample::<Blake3_256>::new(4, build_options(true), false));
     crate::tests::test_basic_proof_verification(example);
 }
 
 #[test]
 fn matrixmul_test_basic_proof_verification_fail() {
-    let example = Box::new(super::MatrixMulExample::<Blake3_256>::new(4, build_options(false)));
+    let example =
+        Box::new(super::MatrixMulExample::<Blake3_256>::new(4, build_options(false), false));
     crate::tests::test_basic_proof_verification_fail(example);
 }
 
