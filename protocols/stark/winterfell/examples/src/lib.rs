@@ -10,6 +10,7 @@ use winterfell::{
     BatchingMethod, FieldExtension, Proof, ProofOptions, VerifierError,
 };
 
+pub mod density;
 pub mod fibonacci;
 #[cfg(feature = "std")]
 pub mod lamport;
@@ -52,6 +53,10 @@ pub struct ExampleOptions {
     #[structopt(long, global = true)]
     profile: bool,
 
+    /// Input density for matrix-mul: full (100%), hybrid (50%), or sparse (10%)
+    #[structopt(long = "density", global = true)]
+    density: Option<density::Density>,
+
     /// Hash function used in the protocol
     #[structopt(short = "h", long = "hash_fn", default_value = "blake3_256")]
     hash_fn: String,
@@ -78,6 +83,10 @@ pub struct ExampleOptions {
 }
 
 impl ExampleOptions {
+    pub fn density(&self) -> density::Density {
+        self.density.unwrap_or_default()
+    }
+
     pub fn profile_enabled(&self) -> bool {
         self.profile
     }

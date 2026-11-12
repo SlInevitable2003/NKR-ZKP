@@ -83,6 +83,8 @@ CUDA Setup 当前有意委托 CPU Setup，不在 GPU 上生成 SRS；NTT 幂表�
 
 `plonk-gen` 目前支持 `matmul` 与 `fibonacci` 两种用例；`plonk-setup` 在未提供 `--srs` 时现场生成并写出 SRS。下面给出两种电路的完整 CPU 命令，其中第二次 Setup 复用第一次生成的 SRS：
 
+`matmul` 还支持 `--density full|hybrid|sparse`（默认 `full`）：`full` 使用 100% 随机非零元素，`hybrid` 保留 50%，`sparse` 保留 10%，其余元素置零并在 A、B 内独立随机打散；非 `full` 档位的文件名追加 `_hybrid` / `_sparse`。`fibonacci` 不支持该参数。
+
 ```bash
 make plonk-cpu
 

@@ -32,6 +32,11 @@ protocols/stark/winterfell/target/release/winterfell
 protocols/stark/winterfell/target/release/winterfell --help
 ```
 
+`matrix-mul` 支持 `--density full|hybrid|sparse`（默认 `full`）控制输入矩阵
+A、B 的密度：`full` 使用 100% 随机非零元素，`hybrid` 保留 50%，`sparse`
+保留 10%，其余元素置零并随机打散。`make stark-matmul` 可通过 `DENSITY=sparse`
+传入；该参数对其他示例不生效。
+
 除 `matrix-mul` 外，workspace 还包含 Fibonacci、乘法 Fibonacci、VDF、
 Rescue、随机化 AIR、Merkle membership 和 Lamport+ signature 等示例。
 

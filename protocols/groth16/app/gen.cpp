@@ -11,6 +11,7 @@
 #include "libff/common/profiling.hpp"
 #include "libsnark/common/default_types/r1cs_ppzksnark_pp.hpp"
 
+#include "density.hpp"
 #include "groth16/io.hpp"
 #include "profile.hpp"
 #include "r1cs/poseidon.hpp"
@@ -38,7 +39,8 @@ static void finalize_circuit(R1CSManager<FieldT> &mgr,
     for (const auto &[id, val] : assignment) z[mgr.dense_index(id)] = val;
 }
 
-static void build_matmul(R1CSManager<FieldT> &mgr, map<size_t, FieldT> &assignment, size_t s)
+static void build_matmul(R1CSManager<FieldT> &mgr, map<size_t, FieldT> &assignment,
+                         const size_t s, const nkr::Density density)
 {
     vector<Variable<FieldT>> A, B, C, P;
     for (size_t i = 0; i < s * s; i++) A.push_back(Variable<FieldT>(VariableType::Public, mgr));
@@ -59,10 +61,12 @@ static void build_matmul(R1CSManager<FieldT> &mgr, map<size_t, FieldT> &assignme
         }
 
     vector<FieldT> av(s * s), bv(s * s);
+    const nkr::DensitySampler sampler_a(s * s, density);
+    const nkr::DensitySampler sampler_b(s * s, density);
     #pragma omp parallel for
     for (size_t i = 0; i < s * s; i++) {
-        av[i] = FieldT::random_element();
-        bv[i] = FieldT::random_element();
+        av[i] = sampler_a.sample<FieldT>(i, [] { return FieldT::random_element(); });
+        bv[i] = sampler_b.sample<FieldT>(i, [] { return FieldT::random_element(); });
     }
 
     for (size_t i = 0; i < s; i++)
@@ -153,22 +157,36 @@ static void build_sql_aggregate(R1CSManager<FieldT> &mgr,
 }
 
 static void usage(const char *prog) {
-    cerr << "Usage: " << prog << " [--profile] <case> [params...]\n"
+    cerr << "Usage: " << prog
+         << " [--profile] [--density full|hybrid|sparse] <case> [params...]\n"
          << "  cases:\n"
          << "    matmul <size>      matrix-multiplication R1CS of dimension <size>\n"
          << "    poseidon [count]   <count> independent private-input Poseidon hashes\n"
          << "    sql-aggregate <rows>  verify COUNT/SUM over a committed private table\n"
+         << "  input density (matmul only, default full):\n"
+         << "    full    100% of the A and B entries are random nonzero values\n"
+         << "    hybrid  50% of the A and B entries are random nonzero values\n"
+         << "    sparse  10% of the A and B entries are random nonzero values\n"
+         << "    zero positions are shuffled; nonzero counts are ceil(N * density)\n"
          << "  Outputs (in " APP_DATA_DIR "):\n"
          << "    <stem>.bin         R1CS (k, num_cols, A, B, C)\n"
-         << "    <stem>.witness.bin satisfying witness z (size num_cols)\n";
+         << "    <stem>.witness.bin satisfying witness z (size num_cols)\n"
+         << "    hybrid/sparse matmul append _<density> to the default stem\n";
     exit(1);
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]) try {
     bool profile = false;
+    nkr::Density density = nkr::Density::Full;
     vector<string> arguments;
     for (int i = 1; i < argc; ++i) {
         if (string(argv[i]) == "--profile") profile = true;
+        else if (string(argv[i]) == "--density") {
+            if (i + 1 == argc) throw invalid_argument("--density requires a value");
+            density = nkr::parse_density(argv[++i]);
+        }
+        else if (string(argv[i]).rfind("--density=", 0) == 0)
+            density = nkr::parse_density(string(argv[i]).substr(10));
         else arguments.emplace_back(argv[i]);
     }
     if (arguments.empty()) usage(argv[0]);
@@ -177,6 +195,9 @@ int main(int argc, char *argv[]) {
     ppT::init_public_params();
     nkr::ProfileScope total("groth16.gen.total");
     const string case_name = arguments[0];
+
+    if (density != nkr::Density::Full && case_name != "matmul")
+        throw invalid_argument("--density is supported only for matmul");
 
     R1CSManager<FieldT> mgr;
     map<size_t, FieldT> assignment;
@@ -188,9 +209,15 @@ int main(int argc, char *argv[]) {
         if (s == 0) usage(argv[0]);
         {
             nkr::ProfileScope stage("groth16.gen.build_matmul");
-            build_matmul(mgr, assignment, s);
+            build_matmul(mgr, assignment, s, density);
         }
         stem = "matmul_" + to_string(s);
+        if (density != nkr::Density::Full)
+            stem += "_" + string(nkr::density_name(density));
+        const size_t nonzero = nkr::density_nonzero_count(s * s, density);
+        cout << "Density: " << nkr::density_name(density)
+             << " (A: " << nonzero << "/" << s * s << " nonzero, B: "
+             << nonzero << "/" << s * s << " nonzero)\n";
     } else if (case_name == "poseidon") {
         const size_t count = arguments.size() < 2 ? 1 : parse_positive_size(arguments[1]);
         {
@@ -239,4 +266,7 @@ int main(int argc, char *argv[]) {
     cout << "Wrote witness to " << paths.witness << endl;
 
     return 0;
+} catch (const exception &error) {
+    cerr << "gen: " << error.what() << '\n';
+    return 1;
 }

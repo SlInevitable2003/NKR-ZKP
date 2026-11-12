@@ -6,7 +6,6 @@
 use core::marker::PhantomData;
 use std::time::Instant;
 
-use rand_utils::rand_vector;
 use tracing::{field, info_span};
 use winterfell::{
     crypto::{DefaultRandomCoin, ElementHasher, MerkleTree},
@@ -14,7 +13,9 @@ use winterfell::{
     Proof, ProofOptions, Prover, Trace, VerifierError,
 };
 
-use crate::{Blake3_192, Blake3_256, Example, ExampleOptions, HashFunction, Sha3_256};
+use crate::{
+    density::Density, Blake3_192, Blake3_256, Example, ExampleOptions, HashFunction, Sha3_256,
+};
 
 mod air;
 use air::{MatrixMulAir, PublicInputs};
@@ -38,18 +39,28 @@ pub fn get_example(
     matrix_size: usize,
 ) -> Result<Box<dyn Example>, String> {
     let profile = options.profile_enabled();
+    let density = options.density();
     let (options, hash_fn) = options.to_proof_options(28, 8);
 
     match hash_fn {
-        HashFunction::Blake3_192 => {
-            Ok(Box::new(MatrixMulExample::<Blake3_192>::new(matrix_size, options, profile)))
-        },
-        HashFunction::Blake3_256 => {
-            Ok(Box::new(MatrixMulExample::<Blake3_256>::new(matrix_size, options, profile)))
-        },
-        HashFunction::Sha3_256 => {
-            Ok(Box::new(MatrixMulExample::<Sha3_256>::new(matrix_size, options, profile)))
-        },
+        HashFunction::Blake3_192 => Ok(Box::new(MatrixMulExample::<Blake3_192>::new_with_density(
+            matrix_size,
+            options,
+            profile,
+            density,
+        ))),
+        HashFunction::Blake3_256 => Ok(Box::new(MatrixMulExample::<Blake3_256>::new_with_density(
+            matrix_size,
+            options,
+            profile,
+            density,
+        ))),
+        HashFunction::Sha3_256 => Ok(Box::new(MatrixMulExample::<Sha3_256>::new_with_density(
+            matrix_size,
+            options,
+            profile,
+            density,
+        ))),
         _ => Err("The specified hash function cannot be used with this example.".to_string()),
     }
 }
@@ -66,12 +77,31 @@ pub struct MatrixMulExample<H: ElementHasher> {
 
 impl<H: ElementHasher> MatrixMulExample<H> {
     pub fn new(matrix_size: usize, options: ProofOptions, profile: bool) -> Self {
+        Self::new_with_density(matrix_size, options, profile, Density::Full)
+    }
+
+    pub fn new_with_density(
+        matrix_size: usize,
+        options: ProofOptions,
+        profile: bool,
+        density: Density,
+    ) -> Self {
         assert!(matrix_size.is_power_of_two(), "matrix size must be a power of 2");
         assert!(matrix_size >= 2, "matrix size must be at least 2");
 
         let input_start = Instant::now();
-        let a = build_matrix(matrix_size);
-        let b = build_matrix(matrix_size);
+        let square = matrix_size.checked_mul(matrix_size).expect("matrix size overflow");
+        let a = density.generate(square);
+        let b = density.generate(square);
+        let a_zeros = a.iter().filter(|&&value| value == BaseElement::ZERO).count();
+        let b_zeros = b.iter().filter(|&&value| value == BaseElement::ZERO).count();
+        println!(
+            "Density: {density} (a: {}/{} nonzero, b: {}/{} nonzero)",
+            square - a_zeros,
+            square,
+            square - b_zeros,
+            square
+        );
         if profile {
             println!(
                 "[profile] stark.matmul.input_generation = {:.3} ms",
@@ -186,14 +216,6 @@ where
 
 // HELPER FUNCTIONS
 // ================================================================================================
-
-/// Builds an `n x n` matrix (in row-major order) filled with random field elements.
-///
-/// Random values are used to ensure the trace columns attain the maximum possible polynomial
-/// degree (in the same way as the Merkle and Lamport+ examples).
-fn build_matrix(n: usize) -> Vec<BaseElement> {
-    rand_vector(n * n)
-}
 
 /// Computes the product of two `n x n` matrices stored in row-major order.
 fn multiply(a: &[BaseElement], b: &[BaseElement], n: usize) -> Vec<BaseElement> {

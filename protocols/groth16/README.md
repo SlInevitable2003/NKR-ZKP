@@ -27,6 +27,12 @@ groth16-gen poseidon [count]
 groth16-gen sql-aggregate <rows>
 ```
 
+矩阵乘法支持 `--density full|hybrid|sparse`（默认 `full`）：`full` 使用 100% 随机
+非零元素，`hybrid` 保留 50%，`sparse` 保留 10%，其余元素置零并在 A、B 内独立随机
+打散。非零个数为 `ceil(N × 密度)`，非 `full` 档位的产物文件名追加 `_hybrid` /
+`_sparse`。完整命令见根目录 README 的「Groth16 构建与运行」一节；该参数仅对
+`matmul` 生效，`poseidon` 和 `sql-aggregate` 传入非 `full` 值会报错。
+
 Poseidon 使用 BN254 标量域上的 `x^5`、`t=3`、`R_F=8`、`R_P=57`
 参数，二输入哈希定义为 `Poseidon([0, left, right])[0]`。每个实例将左右
 原像作为私有见证，将摘要作为公开输入；`count` 默认为 1，可用于生成多个相互

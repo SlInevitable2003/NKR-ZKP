@@ -5,6 +5,7 @@
 
 use std::time::Instant;
 
+use examples::density::Density;
 use examples::{fibonacci, rescue, vdf, ExampleOptions, ExampleType};
 #[cfg(feature = "std")]
 use examples::{lamport, matrixmul, merkle, rescue_raps};
@@ -24,6 +25,18 @@ fn main() {
     // Read command-line args before configuring tracing so --profile can
     // control detailed protocol output without requiring an environment variable.
     let options = ExampleOptions::from_args();
+
+    if options.density() != Density::Full {
+        let supported = match &options.example {
+            #[cfg(feature = "std")]
+            ExampleType::MatrixMul { .. } => true,
+            _ => false,
+        };
+        if !supported {
+            eprintln!("--density is supported only for matrix-mul");
+            std::process::exit(1);
+        }
+    }
 
     // configure logging
     if std::env::var("WINTER_LOG").is_err() {

@@ -86,6 +86,28 @@ G16=build/groth16/bin
 "$G16/groth16-verify" --profile sql_aggregate_1024.bin
 ```
 
+### 矩阵乘法输入密度
+
+`groth16-gen matmul` 支持 `--density full|hybrid|sparse` 控制输入矩阵 A、B 的密度，省略时为 `full`（值大小写不敏感）：
+
+| 档位 | 非零元素占比 | 含义 |
+| --- | --- | --- |
+| `full`（FULL） | 100% | A、B 全部为随机非零值 |
+| `hybrid`（HYBRID） | 50% | A、B 各保留 `ceil(N/2)` 个随机非零值，其余置零 |
+| `sparse`（SPARSE） | 10% | A、B 各保留 `ceil(N/10)` 个随机非零值，其余置零 |
+
+其中 `N = size²` 为单个矩阵的元素个数。A、B 独立采样，零元素位置在各自矩阵内随机打散；密度只改变输入数据，不改变 R1CS 结构和中间乘积的约束。除 `full` 外的档位会在产物文件名后追加 `_hybrid` / `_sparse`：
+
+```bash
+G16=build/groth16/bin
+"$G16/groth16-gen" --profile --density sparse matmul 100
+"$G16/groth16-setup" --profile --backend cpu matmul_100_sparse.bin
+"$G16/groth16-prove" --profile --backend cpu matmul_100_sparse.bin
+"$G16/groth16-verify" --profile matmul_100_sparse.bin
+```
+
+`--density` 只对 `matmul` 生效；`poseidon` 和 `sql-aggregate` 传入非 `full` 值会报错。
+
 ### 使用 NVIDIA CUDA 后端
 
 `CUDA_ARCH` 应设置为目标 GPU 的计算能力，例如 `80` 表示 compute capability 8.0。CUDA 默认位于 `/usr/local/cuda`；安装在其他位置时可额外传入 `CUDA_HOME=/path/to/cuda`。
@@ -160,6 +182,20 @@ PLONK_BIN=build/plonk/bin
 "$PLONK_BIN/plonk-prove" --profile --backend cpu matmul_79.bin
 "$PLONK_BIN/plonk-verify" --profile matmul_79.bin
 ```
+
+### 矩阵乘法输入密度
+
+`plonk-gen matmul` 同样支持 `--density full|hybrid|sparse`（默认 `full`，值大小写不敏感），语义与 Groth16 一致：`full` 全部为随机非零值，`hybrid` 保留 50%，`sparse` 保留 10%，A、B 独立采样且零位置随机打散。非 `full` 档位的文件名追加 `_hybrid` / `_sparse`：
+
+```bash
+PLONK_BIN=build/plonk/bin
+"$PLONK_BIN/plonk-gen" --profile --density sparse matmul 79
+"$PLONK_BIN/plonk-setup" --profile --backend cpu matmul_79_sparse.bin
+"$PLONK_BIN/plonk-prove" --profile --backend cpu matmul_79_sparse.bin
+"$PLONK_BIN/plonk-verify" --profile matmul_79_sparse.bin
+```
+
+`--density` 只对 `matmul` 生效，`fibonacci` 不支持。
 
 ### 使用 NVIDIA CUDA 后端
 
@@ -267,6 +303,16 @@ RAYON_NUM_THREADS=8 \
   protocols/stark/winterfell/target/release/winterfell \
   matrix-mul -n 8 --profile
 ```
+
+矩阵乘法示例支持 `--density full|hybrid|sparse`（默认 `full`，值大小写不敏感）指定输入矩阵 A、B 的密度，语义与 Groth16/PLONK 一致：A、B 各保留 `ceil(N × 密度)` 个随机非零元素（`N = n²` 为单个矩阵的元素个数），其余置零并随机打散。`make stark-matmul` 可通过 `DENSITY` 传入：
+
+```bash
+make stark-matmul THREADS=8 MATRIX_SIZE=8 DENSITY=sparse PROFILE=1
+protocols/stark/winterfell/target/release/winterfell \
+  matrix-mul -n 8 --density sparse --profile
+```
+
+`--density` 只对 `matrix-mul` 生效；其他示例传入非 `full` 值会报错。
 
 示例程序还包含 Fibonacci、乘法 Fibonacci、VDF、Rescue hash chain、
 随机化 AIR permutation、Merkle membership 和 Lamport+ signature 等 AIR。

@@ -10,6 +10,7 @@ PLONK_DATA_DIR ?= $(PLONK_BUILD_DIR)/data
 JOBS ?= $(shell nproc)
 THREADS ?= 4
 MATRIX_SIZE ?= 4
+DENSITY ?= full
 PROFILE ?= 0
 CUDA_ARCH ?= 120
 HIP_ARCH ?=
@@ -51,7 +52,7 @@ help:
 	@echo "  plonk-test-cpu-prove-verify  build and test PLONK CPU Prove/Verify"
 	@echo "  plonk-clean   remove the PLONK CMake build tree"
 	@echo "  stark          build Winterfell with concurrent support"
-	@echo "  stark-matmul   run the Winterfell matrix multiplication example"
+	@echo "  stark-matmul   run the Winterfell matrix multiplication example (DENSITY=full|hybrid|sparse)"
 
 check:
 	@./scripts/check-layout.sh
@@ -225,7 +226,7 @@ stark:
 stark-matmul:
 	RAYON_NUM_THREADS=$(THREADS) cargo run --release \
 		--manifest-path protocols/stark/winterfell/Cargo.toml \
-		-p examples --features concurrent -- matrix-mul -n $(MATRIX_SIZE) $(PROFILE_FLAG)
+		-p examples --features concurrent -- matrix-mul -n $(MATRIX_SIZE) --density $(DENSITY) $(PROFILE_FLAG)
 
 clean: groth16-clean plonk-clean
 	cargo clean --manifest-path protocols/stark/winterfell/Cargo.toml
