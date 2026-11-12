@@ -9,6 +9,7 @@
 #include "density.hpp"
 #include "plonk/io.hpp"
 #include "plonkish/arithmetization.hpp"
+#include "plonkish/poseidon.hpp"
 #include "profile.hpp"
 
 using namespace std;
@@ -87,6 +88,23 @@ static void build_matmul(PlonkishManager &mgr, const size_t s, const nkr::Densit
     }
 }
 
+static void build_poseidon(PlonkishManager &mgr, const size_t count,
+                           const nkr::Density density)
+{
+    if (count > numeric_limits<size_t>::max() / 2)
+        throw overflow_error("Poseidon count is too large");
+    const nkr::DensitySampler sampler(2 * count, density);
+    for (size_t i = 0; i < count; ++i) {
+        const Scalar left_value = sampler.sample<Scalar>(
+            2 * i, [] { return Scalar::random_element(); });
+        const Scalar right_value = sampler.sample<Scalar>(
+            2 * i + 1, [] { return Scalar::random_element(); });
+        const Variable left = mgr.private_variable(left_value);
+        const Variable right = mgr.private_variable(right_value);
+        Poseidon::add_hash2(mgr, left, right);
+    }
+}
+
 static void build_fibonacci(PlonkishManager &mgr, const size_t steps)
 {
     if (steps < 2) throw invalid_argument("fibonacci steps must be at least 2");
@@ -117,15 +135,16 @@ static void usage(const char *prog) {
          << "  cases:\n"
          << "    matmul <size>      matrix multiplication of dimension <size>\n"
          << "    fibonacci <steps>  Fibonacci recurrence with <steps> >= 2\n"
-         << "  input density (matmul only, default full):\n"
-         << "    full    100% of the A and B entries are random nonzero values\n"
-         << "    hybrid  50% of the A and B entries are random nonzero values\n"
-         << "    sparse  10% of the A and B entries are random nonzero values\n"
+         << "    poseidon [count]   <count> independent private-input Poseidon hashes\n"
+         << "  input density (matmul and poseidon, default full):\n"
+         << "    full    100% of the input entries are random nonzero values\n"
+         << "    hybrid  50% of the input entries are random nonzero values\n"
+         << "    sparse  10% of the input entries are random nonzero values\n"
          << "    zero positions are shuffled; nonzero counts are ceil(N * density)\n"
          << "  Outputs (in " APP_DATA_DIR "):\n"
          << "    <stem>.bin         PLONK circuit\n"
          << "    <stem>.witness.bin satisfying execution trace\n"
-         << "    hybrid/sparse matmul append _<density> to the default stem\n";
+         << "    hybrid/sparse matmul and poseidon append _<density> to the default stem\n";
     exit(1);
 }
 
@@ -150,8 +169,9 @@ int main(int argc, char *argv[]) try {
     nkr::ProfileScope total("plonk.gen.total");
     const string case_name = arguments[0];
 
-    if (density != nkr::Density::Full && case_name != "matmul")
-        throw invalid_argument("--density is supported only for matmul");
+    if (density != nkr::Density::Full && case_name != "matmul" &&
+        case_name != "poseidon")
+        throw invalid_argument("--density is supported only for matmul and poseidon");
 
     PlonkishManager mgr;
     string stem;
@@ -179,6 +199,19 @@ int main(int argc, char *argv[]) try {
             build_fibonacci(mgr, steps);
         }
         stem = "fibonacci_" + to_string(steps);
+    } else if (case_name == "poseidon") {
+        const size_t count = arguments.size() < 2 ? 1 : parse_size(arguments[1]);
+        {
+            nkr::ProfileScope stage("plonk.gen.build_poseidon");
+            build_poseidon(mgr, count, density);
+        }
+        stem = "poseidon_" + to_string(count);
+        if (density != nkr::Density::Full)
+            stem += "_" + string(nkr::density_name(density));
+        const size_t entries = 2 * count;
+        const size_t nonzero = nkr::density_nonzero_count(entries, density);
+        cout << "Density: " << nkr::density_name(density)
+             << " (inputs: " << nonzero << "/" << entries << " nonzero)\n";
     } else {
         cerr << "Unknown case: " << case_name << "\n";
         usage(argv[0]);

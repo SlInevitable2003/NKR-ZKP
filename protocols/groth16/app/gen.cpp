@@ -138,11 +138,14 @@ static size_t parse_positive_size(const string &text)
 
 static void build_poseidon(R1CSManager<FieldT> &mgr,
                            map<size_t, FieldT> &assignment,
-                           const size_t count)
+                           const size_t count, const nkr::Density density)
 {
+    const nkr::DensitySampler sampler(2 * count, density);
     for (size_t i = 0; i < count; ++i) {
-        const FieldT left_value = FieldT::random_element();
-        const FieldT right_value = FieldT::random_element();
+        const FieldT left_value = sampler.sample<FieldT>(
+            2 * i, [] { return FieldT::random_element(); });
+        const FieldT right_value = sampler.sample<FieldT>(
+            2 * i + 1, [] { return FieldT::random_element(); });
         const FieldT digest_value = Poseidon::hash2(left_value, right_value);
 
         // Only the digest is public: the circuit proves knowledge of a pair of
@@ -199,15 +202,15 @@ static void usage(const char *prog) {
          << "    fibonacci <steps>  compute F_steps from public F0 and F1; steps >= 2\n"
          << "    poseidon [count]   <count> independent private-input Poseidon hashes\n"
          << "    sql-aggregate <rows>  verify COUNT/SUM over a committed private table\n"
-         << "  input density (matmul only, default full):\n"
-         << "    full    100% of the A and B entries are random nonzero values\n"
-         << "    hybrid  50% of the A and B entries are random nonzero values\n"
-         << "    sparse  10% of the A and B entries are random nonzero values\n"
+         << "  input density (matmul and poseidon, default full):\n"
+         << "    full    100% of the input entries are random nonzero values\n"
+         << "    hybrid  50% of the input entries are random nonzero values\n"
+         << "    sparse  10% of the input entries are random nonzero values\n"
          << "    zero positions are shuffled; nonzero counts are ceil(N * density)\n"
          << "  Outputs (in " APP_DATA_DIR "):\n"
          << "    <stem>.bin         R1CS (k, num_cols, A, B, C)\n"
          << "    <stem>.witness.bin satisfying witness z (size num_cols)\n"
-         << "    hybrid/sparse matmul append _<density> to the default stem\n";
+         << "    hybrid/sparse matmul and poseidon append _<density> to the default stem\n";
     exit(1);
 }
 
@@ -232,8 +235,9 @@ int main(int argc, char *argv[]) try {
     nkr::ProfileScope total("groth16.gen.total");
     const string case_name = arguments[0];
 
-    if (density != nkr::Density::Full && case_name != "matmul")
-        throw invalid_argument("--density is supported only for matmul");
+    if (density != nkr::Density::Full && case_name != "matmul" &&
+        case_name != "poseidon")
+        throw invalid_argument("--density is supported only for matmul and poseidon");
 
     R1CSManager<FieldT> mgr;
     map<size_t, FieldT> assignment;
@@ -264,11 +268,19 @@ int main(int argc, char *argv[]) try {
         stem = "fibonacci_" + to_string(steps);
     } else if (case_name == "poseidon") {
         const size_t count = arguments.size() < 2 ? 1 : parse_positive_size(arguments[1]);
+        if (count > numeric_limits<size_t>::max() / 2)
+            throw invalid_argument("Poseidon count is too large");
         {
             nkr::ProfileScope stage("groth16.gen.build_poseidon");
-            build_poseidon(mgr, assignment, count);
+            build_poseidon(mgr, assignment, count, density);
         }
         stem = "poseidon_" + to_string(count);
+        if (density != nkr::Density::Full)
+            stem += "_" + string(nkr::density_name(density));
+        const size_t entries = 2 * count;
+        const size_t nonzero = nkr::density_nonzero_count(entries, density);
+        cout << "Density: " << nkr::density_name(density)
+             << " (inputs: " << nonzero << "/" << entries << " nonzero)\n";
     } else if (case_name == "sql-aggregate") {
         if (arguments.size() < 2) usage(argv[0]);
         const size_t rows = parse_positive_size(arguments[1]);

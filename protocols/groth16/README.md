@@ -28,11 +28,13 @@ groth16-gen poseidon [count]
 groth16-gen sql-aggregate <rows>
 ```
 
-矩阵乘法支持 `--density full|hybrid|sparse`（默认 `full`）：`full` 使用 100% 随机
-非零元素，`hybrid` 保留 50%，`sparse` 保留 10%，其余元素置零并在 A、B 内独立随机
-打散。非零个数为 `ceil(N × 密度)`，非 `full` 档位的产物文件名追加 `_hybrid` /
-`_sparse`。完整命令见根目录 README 的「Groth16 构建与运行」一节；该参数仅对
-`matmul` 生效，`fibonacci`、`poseidon` 和 `sql-aggregate` 传入非 `full` 值会报错。
+矩阵乘法和 Poseidon 支持 `--density full|hybrid|sparse`（默认 `full`）：`full`
+使用 100% 随机非零输入，`hybrid` 保留 50%，`sparse` 保留 10%，其余置零并随机
+打散。`matmul` 对 A、B 各 `N` 个元素独立采样；`poseidon` 对每个哈希的左右输入
+（共 `2 × count` 个）独立采样。非零个数为 `ceil(N × 密度)`，非 `full` 档位的
+产物文件名追加 `_hybrid` / `_sparse`。完整命令见根目录 README 的「Groth16 构建与
+运行」一节；该参数仅对 `matmul` 和 `poseidon` 生效，`fibonacci` 和 `sql-aggregate`
+传入非 `full` 值会报错。
 
 Fibonacci 从两个公开种子 `F0, F1` 开始，递推 `Fi = F(i-2) + F(i-1)`，
 将 `F_steps` 作为第三个公开输入，所有中间项为私有见证。`steps` 必须不小于 2，

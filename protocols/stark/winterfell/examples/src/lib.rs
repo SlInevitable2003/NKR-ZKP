@@ -18,6 +18,7 @@ pub mod lamport;
 pub mod matrixmul;
 #[cfg(feature = "std")]
 pub mod merkle;
+pub mod poseidon;
 pub mod rescue;
 #[cfg(feature = "std")]
 pub mod rescue_raps;
@@ -186,6 +187,12 @@ pub enum ExampleType {
         /// Length of Fibonacci sequence; must be a power of two
         #[structopt(short = "n", default_value = "65536")]
         sequence_length: usize,
+    },
+    /// Compute Poseidon hashes over two-element inputs
+    Poseidon {
+        /// Number of Poseidon hashes; must be a power of two
+        #[structopt(short = "n", long = "num-hashes", default_value = "1")]
+        num_hashes: usize,
     },
     /// Compute a matrix multiplication of two matrices
     #[cfg(feature = "std")]

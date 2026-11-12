@@ -6,7 +6,7 @@
 use std::time::Instant;
 
 use examples::density::Density;
-use examples::{fibonacci, rescue, vdf, ExampleOptions, ExampleType};
+use examples::{fibonacci, poseidon, rescue, vdf, ExampleOptions, ExampleType};
 #[cfg(feature = "std")]
 use examples::{lamport, matrixmul, merkle, rescue_raps};
 use structopt::StructOpt;
@@ -30,10 +30,11 @@ fn main() {
         let supported = match &options.example {
             #[cfg(feature = "std")]
             ExampleType::MatrixMul { .. } => true,
+            ExampleType::Poseidon { .. } => true,
             _ => false,
         };
         if !supported {
-            eprintln!("--density is supported only for matrix-mul");
+            eprintln!("--density is supported only for matrix-mul and poseidon");
             std::process::exit(1);
         }
     }
@@ -79,6 +80,7 @@ fn main() {
         ExampleType::FibSmall { sequence_length } => {
             fibonacci::fib_small::get_example(&options, sequence_length)
         },
+        ExampleType::Poseidon { num_hashes } => poseidon::get_example(&options, num_hashes),
         #[cfg(feature = "std")]
         ExampleType::MatrixMul { matrix_size } => matrixmul::get_example(&options, matrix_size),
         ExampleType::Vdf { num_steps } => vdf::regular::get_example(&options, num_steps),

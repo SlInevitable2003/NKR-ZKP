@@ -81,9 +81,11 @@ CUDA Setup 当前有意委托 CPU Setup，不在 GPU 上生成 SRS；NTT 幂表�
 
 与 Groth16 一样，PLONK 始终使用同名的四个统一程序，不为不同后端分别生成可执行文件。CPU 构建支持 `--backend cpu`；CUDA 构建支持 `cpu/cuda`；HIP 构建支持 `cpu/hip`。HIP Setup 与 CUDA Setup 一样复用 CPU 实现，HIP Prove 使用不依赖 warp shuffle 和 cooperative groups 的 DCU 安全算子。`plonk-gen` 和 `plonk-verify` 不接收 `--backend`。
 
-`plonk-gen` 目前支持 `matmul` 与 `fibonacci` 两种用例；`plonk-setup` 在未提供 `--srs` 时现场生成并写出 SRS。下面给出两种电路的完整 CPU 命令，其中第二次 Setup 复用第一次生成的 SRS：
+`plonk-gen` 目前支持 `matmul`、`fibonacci` 与 `poseidon` 三种用例；`plonk-setup` 在未提供 `--srs` 时现场生成并写出 SRS。下面给出前两种电路的完整 CPU 命令，其中第二次 Setup 复用第一次生成的 SRS：
 
-`matmul` 还支持 `--density full|hybrid|sparse`（默认 `full`）：`full` 使用 100% 随机非零元素，`hybrid` 保留 50%，`sparse` 保留 10%，其余元素置零并在 A、B 内独立随机打散；非 `full` 档位的文件名追加 `_hybrid` / `_sparse`。`fibonacci` 不支持该参数。
+Poseidon 使用与 Groth16 相同的 BN254 参数（`x^5`、`t=3`、`R_F=8`、`R_P=57`，共享 `common/include/crypto/poseidon.hpp`），`poseidon [count]` 默认生成 1 个实例；左右原像为私有见证，摘要为公开输入。
+
+`matmul` 和 `poseidon` 支持 `--density full|hybrid|sparse`（默认 `full`）：`full` 使用 100% 随机非零输入，`hybrid` 保留 50%，`sparse` 保留 10%，其余置零并随机打散。`matmul` 对 A、B 独立采样，`poseidon` 对 `2 × count` 个输入独立采样；非 `full` 档位的文件名追加 `_hybrid` / `_sparse`。`fibonacci` 不支持该参数。
 
 ```bash
 make plonk-cpu

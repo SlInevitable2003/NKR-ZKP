@@ -99,17 +99,17 @@ G16=build/groth16/bin
 "$G16/groth16-verify" --profile sql_aggregate_1024.bin
 ```
 
-### 矩阵乘法输入密度
+### 输入数据密度
 
-`groth16-gen matmul` 支持 `--density full|hybrid|sparse` 控制输入矩阵 A、B 的密度，省略时为 `full`（值大小写不敏感）：
+`groth16-gen` 的 `matmul` 和 `poseidon` 支持 `--density full|hybrid|sparse`，省略时为 `full`（值大小写不敏感）：
 
 | 档位 | 非零元素占比 | 含义 |
 | --- | --- | --- |
-| `full`（FULL） | 100% | A、B 全部为随机非零值 |
-| `hybrid`（HYBRID） | 50% | A、B 各保留 `ceil(N/2)` 个随机非零值，其余置零 |
-| `sparse`（SPARSE） | 10% | A、B 各保留 `ceil(N/10)` 个随机非零值，其余置零 |
+| `full`（FULL） | 100% | 输入全部为随机非零值 |
+| `hybrid`（HYBRID） | 50% | 保留 `ceil(N/2)` 个随机非零值，其余置零 |
+| `sparse`（SPARSE） | 10% | 保留 `ceil(N/10)` 个随机非零值，其余置零 |
 
-其中 `N = size²` 为单个矩阵的元素个数。A、B 独立采样，零元素位置在各自矩阵内随机打散；密度只改变输入数据，不改变 R1CS 结构和中间乘积的约束。除 `full` 外的档位会在产物文件名后追加 `_hybrid` / `_sparse`：
+`matmul` 中 `N = size²`，A、B 独立采样；`poseidon` 中 `N = 2 × count`，每个哈希的左右输入独立采样。零元素位置随机打散；密度只改变输入数据，不改变电路结构和约束。除 `full` 外的档位会在产物文件名后追加 `_hybrid` / `_sparse`：
 
 ```bash
 G16=build/groth16/bin
@@ -117,9 +117,14 @@ G16=build/groth16/bin
 "$G16/groth16-setup" --profile --backend cpu matmul_100_sparse.bin
 "$G16/groth16-prove" --profile --backend cpu matmul_100_sparse.bin
 "$G16/groth16-verify" --profile matmul_100_sparse.bin
+
+"$G16/groth16-gen" --profile --density hybrid poseidon 8
+"$G16/groth16-setup" --profile --backend cpu poseidon_8_hybrid.bin
+"$G16/groth16-prove" --profile --backend cpu poseidon_8_hybrid.bin
+"$G16/groth16-verify" --profile poseidon_8_hybrid.bin
 ```
 
-`--density` 只对 `matmul` 生效；`fibonacci`、`poseidon` 和 `sql-aggregate` 传入非 `full` 值会报错。
+`--density` 只对 `matmul` 和 `poseidon` 生效；`fibonacci`、`sql-aggregate` 传入非 `full` 值会报错。
 
 ### 使用 NVIDIA CUDA 后端
 
@@ -196,9 +201,21 @@ PLONK_BIN=build/plonk/bin
 "$PLONK_BIN/plonk-verify" --profile matmul_79.bin
 ```
 
-### 矩阵乘法输入密度
+### Poseidon 电路
 
-`plonk-gen matmul` 同样支持 `--density full|hybrid|sparse`（默认 `full`，值大小写不敏感），语义与 Groth16 一致：`full` 全部为随机非零值，`hybrid` 保留 50%，`sparse` 保留 10%，A、B 独立采样且零位置随机打散。非 `full` 档位的文件名追加 `_hybrid` / `_sparse`：
+`plonk-gen poseidon [count]` 生成 `count` 个独立的二输入 Poseidon 哈希，`count` 默认为 1。每个实例将左右原像作为私有见证、摘要作为公开输入；参数与 Groth16 共用 `common/include/crypto/poseidon.hpp` 的 BN254 常数（`x^5`、`t=3`、`R_F=8`、`R_P=57`）：
+
+```bash
+PLONK_BIN=build/plonk/bin
+"$PLONK_BIN/plonk-gen" --profile poseidon 2
+"$PLONK_BIN/plonk-setup" --profile --backend cpu poseidon_2.bin
+"$PLONK_BIN/plonk-prove" --profile --backend cpu poseidon_2.bin
+"$PLONK_BIN/plonk-verify" --profile poseidon_2.bin
+```
+
+### 输入数据密度
+
+`plonk-gen` 的 `matmul` 和 `poseidon` 支持 `--density full|hybrid|sparse`（默认 `full`，值大小写不敏感），语义与 Groth16 一致：`full` 全部为随机非零值，`hybrid` 保留 50%，`sparse` 保留 10%；matmul 对 A、B 独立采样，poseidon 对 `2 × count` 个输入独立采样，零位置随机打散。非 `full` 档位的文件名追加 `_hybrid` / `_sparse`：
 
 ```bash
 PLONK_BIN=build/plonk/bin
@@ -206,9 +223,11 @@ PLONK_BIN=build/plonk/bin
 "$PLONK_BIN/plonk-setup" --profile --backend cpu matmul_79_sparse.bin
 "$PLONK_BIN/plonk-prove" --profile --backend cpu matmul_79_sparse.bin
 "$PLONK_BIN/plonk-verify" --profile matmul_79_sparse.bin
+
+"$PLONK_BIN/plonk-gen" --profile --density hybrid poseidon 4
 ```
 
-`--density` 只对 `matmul` 生效，`fibonacci` 不支持。
+`--density` 只对 `matmul` 和 `poseidon` 生效，`fibonacci` 不支持。
 
 ### 使用 NVIDIA CUDA 后端
 
@@ -317,7 +336,7 @@ RAYON_NUM_THREADS=8 \
   matrix-mul -n 8 --profile
 ```
 
-矩阵乘法示例支持 `--density full|hybrid|sparse`（默认 `full`，值大小写不敏感）指定输入矩阵 A、B 的密度，语义与 Groth16/PLONK 一致：A、B 各保留 `ceil(N × 密度)` 个随机非零元素（`N = n²` 为单个矩阵的元素个数），其余置零并随机打散。`make stark-matmul` 可通过 `DENSITY` 传入：
+`matrix-mul` 和 `poseidon` 支持 `--density full|hybrid|sparse`（默认 `full`，值大小写不敏感），语义与 Groth16/PLONK 一致：`matrix-mul` 中 A、B 各保留 `ceil(N × 密度)` 个随机非零元素（`N = n²`），`poseidon` 中 `2 × 哈希数` 个输入按同一规则采样，其余置零并随机打散。`make stark-matmul` 可通过 `DENSITY` 传入：
 
 ```bash
 make stark-matmul THREADS=8 MATRIX_SIZE=8 DENSITY=sparse PROFILE=1
@@ -325,9 +344,18 @@ protocols/stark/winterfell/target/release/winterfell \
   matrix-mul -n 8 --density sparse --profile
 ```
 
-`--density` 只对 `matrix-mul` 生效；其他示例传入非 `full` 值会报错。
+Poseidon 示例：
 
-示例程序还包含 Fibonacci、乘法 Fibonacci、VDF、Rescue hash chain、
+```bash
+protocols/stark/winterfell/target/release/winterfell \
+  poseidon -n 2 --density sparse --profile
+```
+
+`poseidon` 的 `-n` 是哈希个数，必须为 2 的幂；STARK 版本使用 f128 域上的 Poseidon 参数（`x^5`、`t=3`、`R_F=8`、`R_P=57`，round constants 由 Grain LFSR 生成，MDS 为 Cauchy 矩阵），因此摘要值与 BN254 的 Groth16/PLONK 电路不同。
+
+`--density` 只对 `matrix-mul` 和 `poseidon` 生效；其他示例传入非 `full` 值会报错。
+
+示例程序还包含 Fibonacci、Poseidon、乘法 Fibonacci、VDF、Rescue hash chain、
 随机化 AIR permutation、Merkle membership 和 Lamport+ signature 等 AIR。
 可通过 `--hash_fn`、`--queries`、`--blowup`、`--grinding`、
 `--field_extension` 与 `--folding` 调整证明参数；这些参数会影响证明时间、
