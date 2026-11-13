@@ -23,8 +23,8 @@ python3 -m scripts.bench inputs --suite p1 --circuit matmul --k 20
 ./scripts/run-functional.sh --tier smoke
 
 # 单卡性能测试：先标定并发，再用同一个 run-id 正式跑
-python3 -m scripts.bench qualify --suite p1 --tier smoke --run-id demo
-python3 -m scripts.bench run --suite p1 --tier smoke --run-id demo
+python3 -m scripts.bench qualify --suite p1 --tier smoke --run-id p1-calib
+python3 -m scripts.bench run --suite p1 --tier smoke --run-id p1-calib
 
 # 功能 + P1 + P2（P3 由 Slurm 的 run-node 单独执行）
 ./scripts/run-all.sh --tier full
@@ -34,6 +34,16 @@ python3 -m scripts.bench run --suite p1 --tier smoke --run-id demo
 ```
 
 `python3 -m scripts.bench` 必须在仓库根目录执行；包装脚本会自动 `cd` 到根目录。
+
+`--tier` 只控制测试范围，不是协议或测试类型：
+
+- `smoke`：快速自检，只跑功能测试 + `matmul/full` 的 `2^20,2^22`，
+  P3 只跑 1 个 wave，重复 1 次。用于确认二进制、设备、采集和报告链路能跑通，
+  **不作为正式验收数据**。
+- `standard`：日常回归/中期报告，覆盖 `2^20,2^22,2^24`。
+- `full`：正式全量，覆盖 `2^20–2^26` 和全部电路/密度。
+
+`run-id` 只是结果目录名，例如 `p1-calib`，可以任意取；不是特殊模式。
 如果测试环境的构建目录不是 `build/groth16[-cuda|-hip]` / `build/plonk[-cuda|-hip]`，
 请在 `scripts/configs/matrix.json` 的 `platforms.*.groth16_bin`、`groth16_data`、
 `plonk_bin`、`plonk_data` 中改成实际路径。
