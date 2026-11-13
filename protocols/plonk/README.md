@@ -81,6 +81,8 @@ CUDA Setup 当前有意委托 CPU Setup，不在 GPU 上生成 SRS；NTT 幂表�
 
 与 Groth16 一样，PLONK 始终使用同名的四个统一程序，不为不同后端分别生成可执行文件。CPU 构建支持 `--backend cpu`；CUDA 构建支持 `cpu/cuda`；HIP 构建支持 `cpu/hip`。HIP Setup 与 CUDA Setup 一样复用 CPU 实现，HIP Prove 使用不依赖 warp shuffle 和 cooperative groups 的 DCU 安全算子。`plonk-gen` 和 `plonk-verify` 不接收 `--backend`。
 
+`plonk-prove` 支持 `--output <proof-file>` 覆盖 proof 输出路径；`plonk-verify` 支持 `--proof <proof-file>` 从指定路径读取 proof。两者只改 app 入口的路径解析，不影响协议数据。
+
 `plonk-gen` 目前支持 `matmul`、`fibonacci`、`poseidon` 与 `sql-aggregate` 四种用例；`plonk-setup` 在未提供 `--srs` 时现场生成并写出 SRS。下面给出前两种电路的完整 CPU 命令，其中第二次 Setup 复用第一次生成的 SRS：
 
 Poseidon 使用与 Groth16 相同的 BN254 参数（`x^5`、`t=3`、`R_F=8`、`R_P=57`，共享 `common/include/crypto/poseidon.hpp`），`poseidon [count]` 默认生成 1 个实例；左右原像为私有见证，摘要为公开输入。

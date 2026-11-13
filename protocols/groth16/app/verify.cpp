@@ -18,18 +18,21 @@ using nkr::configure_profiling;
 
 static void usage(const char *program)
 {
-    std::cerr << "Usage: " << program << " [--path <dir>] [--profile] <r1cs-file>\n";
+    std::cerr << "Usage: " << program
+              << " [--path <dir>] [--proof <proof-file>] [--profile] <r1cs-file>\n";
     std::exit(2);
 }
 
 int main(int argc, char **argv)
 {
     std::filesystem::path directory = APP_DATA_DIR;
+    std::filesystem::path proof_input;
     std::string filename;
     bool profile_enabled = false;
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
         if (argument == "--path" && i + 1 < argc) directory = argv[++i];
+        else if (argument == "--proof" && i + 1 < argc) proof_input = argv[++i];
         else if (argument == "--profile") profile_enabled = true;
         else if (argument == "--help" || argument == "-h") usage(argv[0]);
         else if (!argument.empty() && argument.front() == '-') usage(argv[0]);
@@ -41,7 +44,8 @@ int main(int argc, char **argv)
 
     try {
         ProfileScope total("groth16.verify.total");
-        const auto paths = artifact_paths(directory, filename);
+        auto paths = artifact_paths(directory, filename);
+        if (!proof_input.empty()) paths.proof = proof_input;
         Circuit circuit;
         std::vector<Scalar> witness;
         VerificationKey key;

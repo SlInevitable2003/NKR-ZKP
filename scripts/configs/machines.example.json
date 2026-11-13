@@ -1,0 +1,62 @@
+{
+  "gpu01": {
+    "host": "gpu01",
+    "user": "bench",
+    "port": 22,
+    "repo": "/home/bench/NKR-ZKP",
+    "workdir": "/scratch/bench/nkr",
+    "local": false,
+    "platform": "cuda",
+    "device_uuids": ["GPU-REPLACE-0", "GPU-REPLACE-1", "GPU-REPLACE-2", "GPU-REPLACE-3"],
+    "env": ["module load cuda/12.4"],
+    "python": "python3"
+  },
+  "gpu02": {
+    "host": "gpu02",
+    "user": "bench",
+    "port": 22,
+    "repo": "/home/bench/NKR-ZKP",
+    "workdir": "/scratch/bench/nkr",
+    "local": false,
+    "platform": "cuda",
+    "device_uuids": ["GPU-REPLACE-0", "GPU-REPLACE-1", "GPU-REPLACE-2", "GPU-REPLACE-3"],
+    "env": ["module load cuda/12.4"],
+    "python": "python3"
+  },
+  "gpu03": {
+    "host": "gpu03",
+    "user": "bench",
+    "port": 22,
+    "repo": "/home/bench/NKR-ZKP",
+    "workdir": "/scratch/bench/nkr",
+    "local": false,
+    "platform": "cuda",
+    "device_uuids": ["GPU-REPLACE-0", "GPU-REPLACE-1", "GPU-REPLACE-2", "GPU-REPLACE-3"],
+    "env": ["module load cuda/12.4"],
+    "python": "python3"
+  },
+  "dcu01": {
+    "host": "dcu01",
+    "user": "bench",
+    "port": 22,
+    "repo": "/home/bench/NKR-ZKP",
+    "workdir": "/scratch/bench/nkr",
+    "local": false,
+    "platform": "hip",
+    "device_uuids": ["card0", "card1", "card2", "card3", "card4", "card5", "card6", "card7"],
+    "env": ["module load rocm/6.2"],
+    "python": "python3"
+  },
+  "dcu02": {
+    "host": "dcu02",
+    "user": "bench",
+    "port": 22,
+    "repo": "/home/bench/NKR-ZKP",
+    "workdir": "/scratch/bench/nkr",
+    "local": false,
+    "platform": "hip",
+    "device_uuids": ["card0", "card1", "card2", "card3", "card4", "card5", "card6", "card7"],
+    "env": ["module load rocm/6.2"],
+    "python": "python3"
+  }
+}

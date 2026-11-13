@@ -19,19 +19,22 @@ using nkr::configure_profiling;
 static void usage(const char *program)
 {
     std::cerr << "Usage: " << program
-              << " [--backend cpu|cuda|hip] [--path <dir>] [--profile] <r1cs-file>\n";
+              << " [--backend cpu|cuda|hip] [--path <dir>] [--output <proof-file>]"
+                 " [--profile] <r1cs-file>\n";
     std::exit(2);
 }
 
 int main(int argc, char **argv)
 {
     std::filesystem::path directory = APP_DATA_DIR;
+    std::filesystem::path proof_output;
     std::string backend_name = "cpu", filename;
     bool profile = false;
     for (int i = 1; i < argc; ++i) {
         const std::string argument = argv[i];
         if (argument == "--backend" && i + 1 < argc) backend_name = argv[++i];
         else if (argument == "--path" && i + 1 < argc) directory = argv[++i];
+        else if (argument == "--output" && i + 1 < argc) proof_output = argv[++i];
         else if (argument == "--profile") profile = true;
         else if (argument == "--help" || argument == "-h") usage(argv[0]);
         else if (!argument.empty() && argument.front() == '-') usage(argv[0]);
@@ -43,7 +46,8 @@ int main(int argc, char **argv)
 
     try {
         ProfileScope program_total("groth16.prove.program_total");
-        const auto paths = artifact_paths(directory, filename);
+        auto paths = artifact_paths(directory, filename);
+        if (!proof_output.empty()) paths.proof = proof_output;
         Circuit circuit;
         std::vector<Scalar> witness;
         ProvingKey proving_key;

@@ -128,6 +128,8 @@ G16=build/groth16/bin
 ```
 
 - `--path <dir>` 覆盖默认产物目录, 此后 setup/prove/verify 必须指向同一目录;
+- `groth16-prove --output <proof-file>` 覆盖 proof 输出路径;
+  `groth16-verify --proof <proof-file>` 从指定路径读取 proof;
 - PK/VK/证明使用同一文件格式; `gen` 与后端无关, 切换后端不需要重新生成电路;
 - 性能计时分层: `groth16.prove.program_total` 是包含文件读写, 校验和 prepare 的程序端到端时间, `groth16.prove.prepare_backend` 覆盖设备布局, NTT 幂表等与 witness 无关的预计算及 PK 上传, `groth16.prove.total` 只包含在线证明生成.
 
@@ -251,6 +253,8 @@ PLONK_BIN=build/plonk/bin
 ```
 
 - `--path <dir>` 覆盖默认产物目录, setup/prove/verify 必须使用同一目录;
+- `plonk-prove --output <proof-file>` 覆盖 proof 输出路径;
+  `plonk-verify --proof <proof-file>` 从指定路径读取 proof;
 - PK 中包含 Setup 预计算数据, 更新程序后需要重新运行 Setup, 不能复用旧 PK;
 - CPU Setup 的并行度由 `OMP_NUM_THREADS` 控制, CPU Prove 保持单线程.
 
@@ -341,6 +345,13 @@ STARK 没有 Setup/SRS: `winterfell <示例>` 在运行时构造轨迹并生成�
 验证与证明在同一次运行中完成, 没有独立的 verify 程序.
 
 更详细的组件, AIR 实现和命令说明见 [protocols/stark/README.md](protocols/stark/README.md).
+
+## 测试脚本
+
+功能测试、P1/P2/P3 性能测试、资源采集和报告生成入口位于
+[`scripts/README.md`](scripts/README.md)。脚本按测试环境的 CPU/GPU/DCU
+构建目录、二进制路径和设备清单运行，相关路径在
+`scripts/configs/matrix.json` 中配置。
 
 ## 分层规则
 

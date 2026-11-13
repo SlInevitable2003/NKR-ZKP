@@ -9,7 +9,7 @@
 
 CUDA 和 HIP 有意保留各自独立的内核。两者实现相同的抽象算子边界，并使用与协议无关的测试向量进行验证，但不会通过宏强行合并为同一份内核源码。
 
-`scripts/check-hip-safety.sh` 会扫描 HIP 算子、协议后端和测试代码，阻止重新引入 warp vote/shuffle、cooperative groups 或 cooperative kernel launch。Groth16 的旧 `modop-test` 已去除 lane 分布式进位实验，只保留朴素大整数的加减乘测试。
+`tools/checks/check-hip-safety.sh` 会扫描 HIP 算子、协议后端和测试代码，阻止重新引入 warp vote/shuffle、cooperative groups 或 cooperative kernel launch。Groth16 的旧 `modop-test` 已去除 lane 分布式进位实验，只保留朴素大整数的加减乘测试。
 
 CPU 算子不会开启 libff/libfqfft 的全局 `MULTICORE` 宏。Setup 在公共算子的
 调用层使用 OpenMP；Prove 仍调用单线程 libff 原语，避免改变 CPU 基准口径。

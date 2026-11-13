@@ -55,8 +55,8 @@ help:
 	@echo "  stark-matmul   run the Winterfell matrix multiplication example (DENSITY=full|hybrid|sparse)"
 
 check:
-	@./scripts/check-layout.sh
-	@./scripts/check-hip-safety.sh
+	@./tools/checks/check-layout.sh
+	@./tools/checks/check-hip-safety.sh
 
 groth16-cpu:
 	cmake -S . -B $(GROTH16_BUILD_DIR) \
