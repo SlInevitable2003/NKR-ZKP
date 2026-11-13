@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 from .config import Config
@@ -389,35 +389,6 @@ def expand_suite(config: Config, suite: str) -> list[Case]:
             + expand_p3(config)
         )
     raise ValueError(f"unknown suite: {suite}")
-
-
-def filter_tier(cases: list[Case], tier: str, config: Config) -> list[Case]:
-    if tier == "full":
-        return cases
-    if tier == "smoke":
-        selected = [
-            case
-            for case in cases
-            if case.suite == "functional"
-            or (
-                case.circuit == "matmul"
-                and case.density == "full"
-                and (case.suite == "p3" or case.k in (20, 22))
-            )
-        ]
-        return [
-            replace(case, repeats=1, waves=1) if case.suite == "p3" else case
-            for case in selected
-        ]
-    if tier == "standard":
-        return [
-            case
-            for case in cases
-            if case.suite == "functional"
-            or case.suite == "p3"
-            or case.k in (20, 22, 24)
-        ]
-    raise ValueError(f"unknown tier: {tier}")
 
 
 def sort_cases(cases: list[Case]) -> list[Case]:

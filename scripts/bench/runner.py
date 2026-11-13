@@ -78,12 +78,25 @@ class CaseRunner:
         deployment_value = self.config.deployment(case.deployment).get("concurrency", 1)
         if isinstance(deployment_value, int):
             return max(1, deployment_value)
-        # auto
+        # auto: qualify this case once, then reuse the stored concurrency.
         entry = self.qualification.get(case.case_id)
         if isinstance(entry, dict) and entry.get("concurrency"):
             return max(1, int(entry["concurrency"]))
         if isinstance(entry, int):
             return max(1, entry)
+        if case.suite in ("p1", "p2") and case.platform != "cpu":
+            from .qualify import qualify_case
+
+            limit = int(
+                self.config.get("performance", case.suite, "max_concurrency", default=8)
+            )
+            target = float(self.config.get("utilization", "target", default=0.90))
+            entry = qualify_case(
+                self, case, max_concurrency=limit, target=target
+            )
+            self.qualification[case.case_id] = entry
+            write_json(self.run_dir / "qualification.json", self.qualification)
+            return max(1, int(entry.get("concurrency", 1)))
         return 1
 
     def run_case(self, case: Case, *, concurrency: int | None = None) -> dict[str, Any] | None:
@@ -95,7 +108,7 @@ class CaseRunner:
         if case.suite == "p3":
             summary = self._run_p3(case)
         else:
-            summary = self._run_standard(case, p)
+            summary = self._run_repeated(case, p)
         path = self.cases_dir / f"{case.case_id}.json"
         write_json(path, summary)
         if summary.get("status") != "ok":
@@ -104,7 +117,7 @@ class CaseRunner:
         self.results[case.case_id] = summary
         return summary
 
-    def _run_standard(self, case: Case, p: int) -> dict[str, Any]:
+    def _run_repeated(self, case: Case, p: int) -> dict[str, Any]:
         self.prepare(case)
         repetitions: list[RepetitionResult] = []
         total = case.warmup + case.repeats

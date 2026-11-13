@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 from .cases import Case
-from .config import Config
 from .runner import CaseRunner
-from .util import ensure_dir, read_json, write_json
 
 
 def candidate_concurrency(max_value: int) -> list[int]:
@@ -66,37 +63,3 @@ def qualify_case(
         "attempts": attempts,
         **best,
     }
-
-
-def qualify_cases(
-    config: Config,
-    cases: list[Case],
-    run_dir: Path,
-    *,
-    max_concurrency: int | None = None,
-    target: float | None = None,
-) -> dict[str, Any]:
-    runner = CaseRunner(config, run_dir)
-    target = target if target is not None else float(
-        config.get("utilization", "target", default=0.90)
-    )
-    qualification_path = run_dir / "qualification.json"
-    existing = read_json(qualification_path, default={})
-    if not isinstance(existing, dict):
-        existing = {}
-    for case in cases:
-        if case.platform == "cpu" or case.suite == "p3":
-            continue
-        limit = max_concurrency
-        if limit is None:
-            limit = int(
-                config.get("performance", case.suite, "max_concurrency", default=8)
-            )
-        entry = qualify_case(
-            runner, case, max_concurrency=limit, target=target
-        )
-        existing[case.case_id] = entry
-        audit_dir = ensure_dir(run_dir / "audit")
-        write_json(audit_dir / f"{case.case_id}.json", entry)
-        write_json(qualification_path, existing)
-    return existing

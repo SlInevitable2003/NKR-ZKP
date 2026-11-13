@@ -114,7 +114,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "concurrency": 1,
         },
     },
-    "machines_file": "scripts/configs/machines.json",
 }
 
 
@@ -135,7 +134,10 @@ class Config:
         return cls(data, config_path if config_path.exists() else None)
 
     def _load_machines(self) -> dict[str, Any]:
-        path = Path(self.data.get("machines_file", ""))
+        configured = self.data.get("machines_file")
+        if not configured:
+            return {}
+        path = Path(configured)
         if not path.is_absolute():
             path = self.repo_root / path
         machines = read_json(path, default={})

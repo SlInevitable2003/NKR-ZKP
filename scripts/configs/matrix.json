@@ -105,6 +105,5 @@
       "devices": 8,
       "concurrency": 1
     }
-  },
-  "machines_file": "scripts/configs/machines.json"
+  }
 }

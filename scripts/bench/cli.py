@@ -9,9 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .cases import Case, expand_suite, filter_tier, sort_cases
+from .cases import Case, expand_suite, sort_cases
 from .config import Config
-from .qualify import qualify_cases
 from .report import write_report
 from .runner import CaseRunner
 from .util import (
@@ -21,7 +20,6 @@ from .util import (
     now_run_id,
     parse_bits,
     parse_csv,
-    read_json,
     write_json,
 )
 
@@ -36,9 +34,6 @@ def _add_selection(parser: argparse.ArgumentParser) -> None:
         choices=["functional", "p1", "p2", "p3", "all"],
         default="functional",
     )
-    parser.add_argument(
-        "--tier", choices=["smoke", "standard", "full"], default="full"
-    )
     parser.add_argument("--circuit", default=None, help="comma-separated circuit filter")
     parser.add_argument("--density", default=None, help="comma-separated density filter")
     parser.add_argument("--k", default=None, help="e.g. 20,22,24 or 20-26")
@@ -50,7 +45,6 @@ def _add_selection(parser: argparse.ArgumentParser) -> None:
 
 def _select_cases(config: Config, args: argparse.Namespace) -> list[Case]:
     cases = expand_suite(config, args.suite)
-    cases = filter_tier(cases, args.tier, config)
     if args.circuit:
         wanted = set(parse_csv(args.circuit))
         cases = [case for case in cases if case.circuit in wanted]
@@ -184,58 +178,6 @@ def cmd_inputs(args: argparse.Namespace) -> int:
                 f"variables={artifact.variables} -> {artifact.directory}"
             )
     return 0
-
-
-def cmd_qualify(args: argparse.Namespace) -> int:
-    config = Config.load(args.config)
-    config.validate()
-    cases = [
-        case
-        for case in _select_cases(config, args)
-        if case.suite in ("p1", "p2") and case.platform != "cpu"
-    ]
-    if not cases:
-        print("no p1/p2 accelerator cases to qualify")
-        return 0
-    run_dir = args.run_dir or config.results_dir() / (args.run_id or now_run_id())
-    ensure_dir(run_dir)
-    qualify_cases(
-        config,
-        cases,
-        run_dir,
-        max_concurrency=args.max_concurrency,
-        target=args.target,
-    )
-    print(f"qualification written to {run_dir / 'qualification.json'}")
-    return 0
-
-
-def _write_run_metadata(config: Config, run_dir: Path, cases: list[Case]) -> None:
-    payload = {
-        "config_path": str(config.path) if config.path else None,
-        "config": config.data,
-        "cases": [case.case_id for case in cases],
-    }
-    write_json(run_dir / "run.json", payload)
-    env = environment()
-    try:
-        import subprocess
-
-        env["git_commit"] = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout.strip()
-        env["git_status"] = subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "status", "--short"],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout.strip()
-    except OSError:
-        pass
-    write_json(run_dir / "environment.json", env)
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -442,15 +384,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_selection(inputs_parser)
     inputs_parser.add_argument("--run-dir", type=Path, default=None)
     inputs_parser.set_defaults(func=cmd_inputs)
-
-    qualify_parser = sub.add_parser("qualify", help="calibrate concurrency to 90%% utilization")
-    _add_config(qualify_parser)
-    _add_selection(qualify_parser)
-    qualify_parser.add_argument("--run-id", default=None)
-    qualify_parser.add_argument("--run-dir", type=Path, default=None)
-    qualify_parser.add_argument("--max-concurrency", type=int, default=None)
-    qualify_parser.add_argument("--target", type=float, default=None)
-    qualify_parser.set_defaults(func=cmd_qualify)
 
     run_parser = sub.add_parser("run", help="run selected cases")
     _add_config(run_parser)
