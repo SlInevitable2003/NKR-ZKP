@@ -128,43 +128,30 @@ def cmd_preflight(args: argparse.Namespace) -> int:
             problems.append(f"missing binary: {command}")
         elif not os.access(command, os.X_OK):
             problems.append(f"not executable: {command}")
-    if args.remote:
-        from .remote import check_node, node_from_config
-
-        nodes = sorted({node for case in cases for node in case.nodes if not config.node_is_local(node)})
-        remote_log = config.results_dir() / "_preflight"
-        for node_name in nodes:
-            node = node_from_config(config, node_name)
-            ok, error = check_node(node, [], log_dir=remote_log)
-            if ok:
-                print(f"remote: {node_name} reachable")
-            else:
-                problems.append(f"remote {node_name} preflight failed: {error.strip()}")
-    if not args.remote:
-        for case in local_cases:
-            if case.is_stark:
+    for case in local_cases:
+        if case.is_stark:
+            continue
+        for stage, flag in (("prove", "--output"), ("verify", "--proof")):
+            binary = config.bin_for(case.protocol, case.platform) / f"{case.protocol}-{stage}"
+            if not binary.exists():
                 continue
-            for stage, flag in (("prove", "--output"), ("verify", "--proof")):
-                binary = config.bin_for(case.protocol, case.platform) / f"{case.protocol}-{stage}"
-                if not binary.exists():
-                    continue
-                try:
-                    import subprocess
+            try:
+                import subprocess
 
-                    probe = subprocess.run(
-                        [str(binary), "--help"],
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
-                        check=False,
+                probe = subprocess.run(
+                    [str(binary), "--help"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+                text = probe.stdout + probe.stderr
+                if flag not in text:
+                    problems.append(
+                        f"{binary} does not advertise {flag}; rebuild the app entry points"
                     )
-                    text = probe.stdout + probe.stderr
-                    if flag not in text:
-                        problems.append(
-                            f"{binary} does not advertise {flag}; rebuild the app entry points"
-                        )
-                except (OSError, subprocess.SubprocessError) as exc:
-                    warnings.append(f"could not probe {binary}: {exc}")
+            except (OSError, subprocess.SubprocessError) as exc:
+                warnings.append(f"could not probe {binary}: {exc}")
     for tool in ("nvidia-smi", "rocm-smi", "amd-smi"):
         if shutil.which(tool):
             print(f"tool: {tool} = {shutil.which(tool)}")
@@ -258,6 +245,13 @@ def cmd_run(args: argparse.Namespace) -> int:
     if not cases:
         print("no cases selected")
         return 1
+    if any(case.suite == "p3" for case in cases):
+        print(
+            "P3 is executed per node. Use `run-node --node <name> --deployment <name>` "
+            "inside each Slurm job, then `aggregate` on the shared results directory.",
+            file=sys.stderr,
+        )
+        return 1
     run_dir = args.run_dir or config.results_dir() / (args.run_id or now_run_id())
     ensure_dir(run_dir)
     _write_run_metadata(config, run_dir, cases)
@@ -313,59 +307,78 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0 if failures == 0 else 2
 
 
-def cmd_worker(args: argparse.Namespace) -> int:
-    """Remote worker: prepare one node or run one P3 wave."""
-    import time
+def cmd_run_node(args: argparse.Namespace) -> int:
+    """Run this node's P3 share; Slurm starts one of these per node."""
+    from dataclasses import replace
 
-    from .cases import Case
-
-    plan = read_json(args.plan, default=None)
-    if not isinstance(plan, dict):
-        print(f"invalid worker plan: {args.plan}", file=sys.stderr)
+    config = Config.load(args.config)
+    config.validate()
+    if not args.deployment:
+        print("run-node requires --deployment", file=sys.stderr)
         return 1
-    start_at = plan.get("start_at")
-    if start_at:
-        delay = float(start_at) - time.time()
-        if delay > 0:
-            time.sleep(delay)
-    config = Config(plan["config"])
-    case_data = dict(plan["case"])
-    case_data["nodes"] = tuple(case_data.get("nodes", ["local"]))
-    case = Case(**case_data)
-    run_dir = ensure_dir(Path(plan["run_dir"]))
-    result_path = Path(plan["result_path"])
-    runner = CaseRunner(config, run_dir, force=True)
-    result: dict[str, Any] = {"mode": plan.get("mode"), "node": plan.get("node")}
-    try:
-        runner.prepare(case)
-        if plan.get("mode") == "setup":
-            result.update({"status": "ok"})
-        else:
-            wave = int(plan.get("wave", 1))
-            repetition = runner._run_once(case, 1, wave - 1, wave=wave)  # noqa: SLF001
-            result.update(
-                {
-                    "status": repetition.status,
-                    "wave": wave,
-                    "t_max_ms": repetition.t_max_ms,
-                    "t_median_ms": repetition.t_median_ms,
-                    "throughput_proofs_s": repetition.throughput_proofs_s,
-                    "util": repetition.util,
-                    "note": repetition.note,
-                    "runs": [
-                        {
-                            "prove_ms": run.prove_ms,
-                            "proof_valid": run.proof_valid,
-                            "backend_ok": run.backend_ok,
-                        }
-                        for run in repetition.runs
-                    ],
-                }
+    selected = argparse.Namespace(**vars(args))
+    selected.suite = "p3"
+    cases = _select_cases(config, selected)
+    cases = [case for case in cases if args.node in case.nodes]
+    if not cases:
+        print(f"no P3 cases for node {args.node} in {args.deployment}", file=sys.stderr)
+        return 1
+    base_dir = args.run_dir or config.results_dir() / (args.run_id or now_run_id())
+    node_dir = ensure_dir(base_dir / "nodes" / args.node)
+    runner = CaseRunner(
+        config,
+        node_dir,
+        skip_cpu_reference=args.skip_cpu_reference,
+        force=args.force,
+    )
+    results: list[dict[str, Any]] = []
+    for index, case in enumerate(cases, start=1):
+        node_case = replace(case, nodes=(args.node,))
+        print(f"[{index}/{len(cases)}] {case.case_id} @ {args.node}", flush=True)
+        summary = runner.run_case(node_case, concurrency=1)
+        if summary:
+            summary["node_id"] = args.node
+            summary["cluster_nodes"] = len(case.nodes)
+            write_json(node_dir / "cases" / f"{case.case_id}.json", summary)
+            results.append(summary)
+            print(
+                f"  status={summary.get('status')} t_total={summary.get('t_max_ms')} ms",
+                flush=True,
             )
-    except Exception as exc:
-        result.update({"status": "failed", "note": str(exc)})
-    write_json(result_path, result)
-    return 0 if result.get("status") in ("ok", "util_unqualified") else 1
+            if summary.get("status") != "ok" and args.fail_fast:
+                break
+    write_json(
+        node_dir / "node.json",
+        {
+            "node": args.node,
+            "deployment": args.deployment,
+            "platform": config.deployment(args.deployment).get("platform"),
+            "devices": int(config.deployment(args.deployment).get("devices", 1)),
+            "cluster_nodes": len(cases[0].nodes),
+            "cases": [
+                {"case_id": item.get("case_id"), "status": item.get("status")}
+                for item in results
+            ],
+        },
+    )
+    print(f"node results: {node_dir}")
+    return 0 if all(item.get("status") == "ok" for item in results) else 2
+
+
+def cmd_aggregate(args: argparse.Namespace) -> int:
+    config = Config.load(args.config)
+    if args.run_dir is None and args.run_id is None:
+        print("aggregate requires --run-id or --run-dir", file=sys.stderr)
+        return 1
+    base_dir = args.run_dir or config.results_dir() / args.run_id
+    if not base_dir.exists():
+        print(f"run directory not found: {base_dir}", file=sys.stderr)
+        return 1
+    from .aggregate import aggregate_nodes
+
+    result = aggregate_nodes(base_dir)
+    print(f"report: {result['report']} ({result['cases']} cases)")
+    return 0
 
 
 def cmd_report(args: argparse.Namespace) -> int:
@@ -422,7 +435,6 @@ def build_parser() -> argparse.ArgumentParser:
     preflight_parser = sub.add_parser("preflight", help="check binaries and tools")
     _add_config(preflight_parser)
     _add_selection(preflight_parser)
-    preflight_parser.add_argument("--remote", action="store_true")
     preflight_parser.set_defaults(func=cmd_preflight)
 
     inputs_parser = sub.add_parser("inputs", help="generate/copy circuit inputs")
@@ -452,6 +464,27 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--fail-fast", action="store_true")
     run_parser.set_defaults(func=cmd_run)
 
+    run_node_parser = sub.add_parser(
+        "run-node", help="run this node's P3 share (one Slurm job per node)"
+    )
+    _add_config(run_node_parser)
+    _add_selection(run_node_parser)
+    run_node_parser.add_argument("--run-id", default=None)
+    run_node_parser.add_argument("--run-dir", type=Path, default=None)
+    run_node_parser.add_argument("--node", required=True)
+    run_node_parser.add_argument("--force", action="store_true")
+    run_node_parser.add_argument("--skip-cpu-reference", action="store_true")
+    run_node_parser.add_argument("--fail-fast", action="store_true")
+    run_node_parser.set_defaults(func=cmd_run_node, suite="p3")
+
+    aggregate_parser = sub.add_parser(
+        "aggregate", help="combine per-node P3 results into the final report"
+    )
+    _add_config(aggregate_parser)
+    aggregate_parser.add_argument("--run-id", default=None)
+    aggregate_parser.add_argument("--run-dir", type=Path, default=None)
+    aggregate_parser.set_defaults(func=cmd_aggregate)
+
     report_parser = sub.add_parser("report", help="write report.md from a run")
     _add_config(report_parser)
     report_parser.add_argument("--run-id", required=True)
@@ -463,10 +496,6 @@ def build_parser() -> argparse.ArgumentParser:
     clean_parser.add_argument("--run-id", required=True)
     clean_parser.add_argument("--run-dir", type=Path, default=None)
     clean_parser.set_defaults(func=cmd_clean)
-
-    worker_parser = sub.add_parser("_worker", help="internal remote worker")
-    worker_parser.add_argument("--plan", type=Path, required=True)
-    worker_parser.set_defaults(func=cmd_worker)
 
     return parser
 

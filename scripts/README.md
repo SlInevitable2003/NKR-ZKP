@@ -26,7 +26,7 @@ python3 -m scripts.bench inputs --suite p1 --circuit matmul --k 20
 python3 -m scripts.bench qualify --suite p1 --tier smoke --run-id demo
 python3 -m scripts.bench run --suite p1 --tier smoke --run-id demo
 
-# 全量
+# 功能 + P1 + P2（P3 由 Slurm 的 run-node 单独执行）
 ./scripts/run-all.sh --tier full
 
 # 验证两个 prove 进程可并发写不同 proof 路径
@@ -46,7 +46,9 @@ python3 -m scripts.bench run --suite p1 --tier smoke --run-id demo
 | `preflight` | 检查二进制、`nvidia-smi`/`rocm-smi`/`amd-smi` |
 | `inputs` | 生成并缓存 R1CS/witness（Setup 不在这一步） |
 | `qualify` | 对 P1/P2 标定并发度，使真实利用率达到 90% |
-| `run` | 执行用例，写 `cases/*.json`、`summary.csv`、`report.md` |
+| `run` | 执行功能/P1/P2 用例，写 `cases/*.json`、`summary.csv`、`report.md` |
+| `run-node` | 执行本节点的 P3 份额，供 Slurm 每节点调用 |
+| `aggregate` | 合并各节点 P3 结果，生成最终报告 |
 | `report` | 从已有 run 重新生成报告 |
 | `clean` | 删除 run 目录（限制在 `results/` 下） |
 
@@ -73,7 +75,7 @@ scripts/
     ├── inputs.py
     ├── executor.py
     ├── runner.py
-    ├── remote.py
+    ├── aggregate.py
     ├── qualify.py
     ├── metrics.py
     ├── report.py
@@ -94,7 +96,11 @@ results/<run_id>/
 ├── audit/<case_id>.json
 ├── samples/<case_id>/repNNN.csv
 ├── work/<case_id>/...
-└── cpu-reference/...
+├── cpu-reference/...
+└── nodes/<node>/          # P3: run-node 写的本节点结果
+    ├── node.json
+    ├── cases/<case_id>.json
+    └── samples/...
 ```
 
 ## 口径
@@ -121,12 +127,22 @@ STARK 目前只有 CPU 实现。功能测试里的 3 线程/4 线程统一写为
 `DCU-sim`（3 线程）和 `GPU-sim`（4 线程），报告脚注注明这是 CPU 线程配置，
 不是真实 GPU/DCU 结果。
 
-## 多机
+## P3 / Slurm
 
-P3 的 `cuda_3x4` / `hip_2x8` 需要 `scripts/configs/machines.json`。先从
-`machines.example.json` 复制并填写主机名、repo、scratch、GPU/DCU UUID。
-驱动节点会为每个节点写 plan、通过 SSH 启动 `_worker`、用 rsync 回收每个
-wave 的结果；Setup 在每个节点本地执行。使用前请先在测试环境做 `preflight`。
+P3 不做 SSH/rsync 编排：每个节点由 Slurm 启动一个 `run-node`，只跑本节点的
+16 个 wave，结果写到共享目录下的 `results/<run_id>/nodes/<node>/`。所有节点
+完成后，在任意节点执行 `aggregate` 汇总。
+
+```bash
+# Slurm 任务内，每个节点跑自己的份额
+python3 -m scripts.bench run-node --deployment cuda_3x4 --node gpu01 --run-id p3-20261113
+
+# 全部节点结束后汇总
+python3 -m scripts.bench aggregate --run-id p3-20261113
+```
+
+`run-node` 会在本节点独立执行 Setup，不跨节点复用。`machines.example.json`
+只用于可选的设备 UUID 映射；不配置时按节点上的设备编号运行。
 
 ## `--output` / `--proof`
 

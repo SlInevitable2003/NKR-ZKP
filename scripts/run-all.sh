@@ -2,4 +2,6 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-exec python3 -m scripts.bench run --suite all "$@"
+for suite in functional p1 p2; do
+  python3 -m scripts.bench run --suite "$suite" "$@"
+done

@@ -33,7 +33,7 @@
 
 - [x] Groth16/PLONK prove `--output <proof-file>`、verify `--proof <proof-file>`
 - [x] `scripts/bench/` 框架：配置、用例展开、输入生成、Setup、Prove/Verify、监控、指标、报告
-- [x] P1/P2 本地执行；P3 本地 wave 与 SSH/rsync 多机 worker
+- [x] P1/P2 本地执行；P3 由 Slurm 每节点调用 `run-node`，再由 `aggregate` 汇总
 - [x] `scripts/configs/`、`scripts/run-*.sh`、`scripts/check-proof-output.sh`
 - [x] 纯逻辑单元测试（`tools/tests/test_units.py`）
 - [ ] 测试环境编译、Phase 0 `2^24` 试点、真实性能跑数
@@ -223,8 +223,8 @@ scripts/
     ├── cases.py                  # 用例展开、2^k 映射、用例 ID
     ├── inputs.py                 # gen 产物、witness、每用例 Setup、proof 路径
     ├── protocols.py              # 三种协议的命令构造与输出解析
-    ├── executor.py               # 本地/SSH 执行、进程组、超时、重试
-    ├── remote.py                 # 多机 SSH/rsync/worker/结果回收
+    ├── executor.py               # 本地执行、进程组、超时、重试
+    ├── aggregate.py              # 合并各节点 P3 结果
     ├── monitor/
     │   ├── __init__.py
     │   ├── base.py
@@ -514,29 +514,28 @@ groth16-verify ... --proof work/<case>/<rep>/<stem>_p0.proof.bin <stem>.bin
 - 所有卡同时启动；
 - 汇总用全局 `T_max`，同时输出每卡 `T_max` 和 straggler 比。
 
-### 6.5 P3 多机多卡
+### 6.5 P3 多机多卡（Slurm）
 
-1. `preflight`：SSH、repo commit、二进制、驱动、卡数、磁盘、内存、
-   NTP 偏差、Python 版本；
-2. `stage`：把 gen 产物和本用例 Setup 需要的输入分发到各节点；
-   每个节点独立 Setup；
-3. `wave`：共 16 个 wave；每个 wave：
-   - 驱动节点广播 `start_at`；
-   - 所有节点/卡同时各启动 1 个 `2^26` Prove；
-   - 记录每卡在线时间；
-   - 所有节点完成后进入下一个 wave；
-4. `aggregate`：
-   - `T_total = Σ T_w`（全局 barrier 口径）；
-   - 等价 2^30 证明数 = `节点数 × 卡数`；
+多机分发由外部 Slurm 负责，脚本不做 SSH/rsync：
+
+1. Slurm 为每个节点启动一个 `python3 -m scripts.bench run-node`；
+2. `run-node` 只做本节点的事：
+   - 本节点 preflight；
+   - 本节点独立 Setup；
+   - 本节点所有卡跑 16 个 wave，每卡一个 `2^26` 证明；
+   - 结果写到共享目录 `results/<run_id>/nodes/<node>/cases/*.json`；
+3. 所有节点结束后执行 `python3 -m scripts.bench aggregate --run-id <id>`：
+   - `T_total = Σ_w max_node(T_w)`；
+   - 等价 2^30 证明数 = `节点数 × 每节点卡数`；
    - 吞吐 = `节点数 × 卡数 / T_total`（等价 2^30 proof/s）；
-   - CPU 基准 = 单机单线程顺序 16 次 `2^26` 的总时间 `T_cpu_total`；
+   - CPU 基准取各节点单线程 16 次 `2^26` 总时间的中位数；
    - 加速比 = `(节点数 × 卡数) × T_cpu_total / T_total`。
 
-时钟同步：
+说明：
 
-- 吞吐以每个进程的 `prove.total` 为准；
-- wave barrier 需要 NTP/chrony 偏差 < 50 ms；
-- 偏差过大时退化为“每节点本地 16 次总时间”，取 `max_node`，并在报告注明。
+- `run-node` 按本地 wave 顺序执行，不假设跨节点 barrier；
+- `aggregate` 使用每个 wave 的跨节点最大值，报告注明 Slurm 启动偏差；
+- 节点结果必须写到共享文件系统，或由 Slurm 任务自行收集到同一目录。
 
 ### 6.6 失败、重试、断点
 
@@ -690,7 +689,7 @@ equiv_2^30_proofs, throughput_equiv_2^30_s, cpu_total_16x_ms
 | Phase 2 | 功能测试全协议、STARK DCU-sim/GPU-sim、报告 | 36 个功能用例 | CPU/GPU/DCU 功能矩阵全绿；STARK 的 sim 标签前后一致 | 2 天 |
 | Phase 3 | 监控、窗口估算、90% 资格标定、P1 | 单卡套件 | P1 `smoke` 全绿；资格门禁生效 | 2 天 |
 | Phase 4 | 单机多卡、逐卡隔离与汇总 | P2 套件 | 4 卡/8 卡跑通 | 1.5 天 |
-| Phase 5 | 多机编排、16 wave、CPU 16 次基准 | P3 套件 | 3×4、2×8 跑通；等价 2^30 吞吐正确 | 2–2.5 天 |
+| Phase 5 | `run-node`、`aggregate`、16 wave、CPU 16 次基准 | P3 套件 | 3×4、2×8 跑通；等价 2^30 吞吐正确 | 2–2.5 天 |
 | Phase 6 | 全量试跑、文档、样例报告 | `scripts/README.md`、样例结果 | `smoke`/`standard` 可复现 | 1–1.5 天 |
 
 合计约 **10–12 个工作日**（不含 `full` 实际跑数）。
@@ -716,7 +715,7 @@ equiv_2^30_proofs, throughput_equiv_2^30_s, cpu_total_16x_ms
 | 每进程复制 PK 导致内存爆 | 多进程受限 | 符号链接共享输入；按 PK/显存算 `p_cap`；大规模 `p=1` |
 | 90% 资格不达标 | 正式用例被排除 | 先调 p/采样/预热；仍不达标则保留审计记录，不伪造 |
 | P3 16 wave 时间长 | 天级跑数 | 分档执行；P3 只跑 2^26；必要时减少重复 |
-| 多机时钟不同步 | wave 对齐误差 | NTP 检查；偏差大时用每节点本地总时间 |
+| 多机启动不同步 | wave 对齐误差 | Slurm 侧尽量同时启动；`aggregate` 用每 wave 跨节点最大值，并在报告注明 |
 | `nvidia-smi` util 不等于 SM 占用 | 指标解释偏差 | 同时记录 memory/power/clock；报告注明定义 |
 | DCU 工具差异 | 采集失败 | 适配器自动探测；失败标 `UTIL_UNKNOWN` |
 | `--profile` 输出大 | 日志膨胀 | 重定向到文件；只解析 `[profile]` 行；不改二进制 |
