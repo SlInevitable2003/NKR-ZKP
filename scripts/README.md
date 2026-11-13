@@ -1,13 +1,11 @@
 # NKR-ZKP 测试脚本
 
-`scripts/` 下只有四个测试入口：
-
 | 脚本 | 测试 |
 | --- | --- |
-| `functional.sh` | 功能测试：Groth16 / PLONK / STARK 的 Gen/Setup/Prove/Verify |
-| `single-card.sh` | Groth16 单卡测试（CPU / GPU / DCU） |
-| `multi-card.sh` | Groth16 单机多卡测试（GPU 4 卡 / DCU 8 卡） |
-| `distributed.sh` | Groth16 多机多卡测试（Slurm 每个节点跑本机份额，最后汇总） |
+| `functional.sh` | 功能测试: Groth16/PLONK/STARK 的 Gen/Setup/Prove/Verify |
+| `single-card.sh` | Groth16 单卡测试(CPU/GPU/DCU) |
+| `multi-card.sh` | Groth16 多卡测试(CPU/GPU/DCU) |
+| `distributed.sh` | Groth16 多机多卡测试(CPU/GPU/DCU) |
 
 ## 功能测试
 
@@ -15,8 +13,7 @@
 ./scripts/functional.sh --run-id func-20261113
 ```
 
-覆盖 `matmul`、`fibonacci`、`poseidon`、`sql`，Groth16/PLONK 在 CPU/GPU/DCU
-上执行，STARK 按 `CPU`、`DCU-sim`（3 线程）、`GPU-sim`（4 线程）执行。
+覆盖 `matmul`、`fibonacci`、`poseidon`、`sql`，Groth16/PLONK/zkSTARK 在 CPU/GPU/DCU 上执行
 
 ## 单卡测试
 
