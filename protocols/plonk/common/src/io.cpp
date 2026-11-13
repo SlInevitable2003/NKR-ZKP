@@ -176,7 +176,7 @@ void strip_suffix(std::string &filename, const std::string &suffix)
 
 } // namespace
 
-ArtifactPaths artifact_paths(const nkr::fs::path &directory, std::string filename)
+ArtifactPaths artifact_paths(const std::filesystem::path &directory, std::string filename)
 {
     const std::array<std::string, 6> suffixes = {
         ".witness.bin", ".srs.bin", ".pk.bin", ".vk.bin", ".proof.bin", ".bin"};
@@ -185,7 +185,7 @@ ArtifactPaths artifact_paths(const nkr::fs::path &directory, std::string filenam
         strip_suffix(filename, suffix);
         if (filename.size() != old_size) break;
     }
-    const nkr::fs::path stem = directory / filename;
+    const std::filesystem::path stem = directory / filename;
     return {stem.string() + ".bin",
             stem.string() + ".witness.bin",
             stem.string() + ".srs.bin",
@@ -194,49 +194,49 @@ ArtifactPaths artifact_paths(const nkr::fs::path &directory, std::string filenam
             stem.string() + ".proof.bin"};
 }
 
-Circuit read_circuit(const nkr::fs::path &path)
+Circuit read_circuit(const std::filesystem::path &path)
 {
     BinaryArchive archive;
     archive.open_for_read(path.string());
     return read_circuit_data(archive);
 }
 
-void write_circuit(const nkr::fs::path &path, const Circuit &circuit)
+void write_circuit(const std::filesystem::path &path, const Circuit &circuit)
 {
     BinaryArchive archive;
     archive.open_for_write(path.string());
     write_circuit_data(archive, circuit);
 }
 
-Witness read_witness(const nkr::fs::path &path)
+Witness read_witness(const std::filesystem::path &path)
 {
     BinaryArchive archive;
     archive.open_for_read(path.string());
     return read_witness_data(archive);
 }
 
-void write_witness(const nkr::fs::path &path, const Witness &witness)
+void write_witness(const std::filesystem::path &path, const Witness &witness)
 {
     BinaryArchive archive;
     archive.open_for_write(path.string());
     write_witness_data(archive, witness);
 }
 
-UniversalSrs read_srs(const nkr::fs::path &path)
+UniversalSrs read_srs(const std::filesystem::path &path)
 {
     BinaryArchive archive;
     archive.open_for_read(path.string());
     return read_srs_data(archive);
 }
 
-void write_srs(const nkr::fs::path &path, const UniversalSrs &srs)
+void write_srs(const std::filesystem::path &path, const UniversalSrs &srs)
 {
     BinaryArchive archive;
     archive.open_for_write(path.string());
     write_srs_data(archive, srs);
 }
 
-ProvingKey read_proving_key(const nkr::fs::path &path)
+ProvingKey read_proving_key(const std::filesystem::path &path)
 {
     BinaryArchive archive;
     archive.open_for_read(path.string());
@@ -257,7 +257,7 @@ ProvingKey read_proving_key(const nkr::fs::path &path)
     return key;
 }
 
-void write_proving_key(const nkr::fs::path &path, const ProvingKey &key)
+void write_proving_key(const std::filesystem::path &path, const ProvingKey &key)
 {
     BinaryArchive archive;
     archive.open_for_write(path.string());
@@ -276,7 +276,7 @@ void write_proving_key(const nkr::fs::path &path, const ProvingKey &key)
     archive.write(key.ntt.quotient_inverse_coset_powers);
 }
 
-VerificationKey read_verification_key(const nkr::fs::path &path)
+VerificationKey read_verification_key(const std::filesystem::path &path)
 {
     BinaryArchive archive;
     archive.open_for_read(path.string());
@@ -288,7 +288,7 @@ VerificationKey read_verification_key(const nkr::fs::path &path)
     return key;
 }
 
-void write_verification_key(const nkr::fs::path &path, const VerificationKey &key)
+void write_verification_key(const std::filesystem::path &path, const VerificationKey &key)
 {
     BinaryArchive archive;
     archive.open_for_write(path.string());
@@ -298,7 +298,7 @@ void write_verification_key(const nkr::fs::path &path, const VerificationKey &ke
     archive.write(key.tau_g2);
 }
 
-Proof read_proof(const nkr::fs::path &path)
+Proof read_proof(const std::filesystem::path &path)
 {
     BinaryArchive archive;
     archive.open_for_read(path.string());
@@ -323,7 +323,7 @@ Proof read_proof(const nkr::fs::path &path)
     return proof;
 }
 
-void write_proof(const nkr::fs::path &path, const Proof &proof)
+void write_proof(const std::filesystem::path &path, const Proof &proof)
 {
     BinaryArchive archive;
     archive.open_for_write(path.string());

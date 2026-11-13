@@ -1,5 +1,5 @@
 #include <cstdlib>
-#include "nkr/filesystem.hpp"
+#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -26,8 +26,8 @@ static void usage(const char *program)
 
 int main(int argc, char **argv)
 {
-    nkr::fs::path directory = APP_DATA_DIR;
-    nkr::fs::path proof_output;
+    std::filesystem::path directory = APP_DATA_DIR;
+    std::filesystem::path proof_output;
     std::string backend_name = "cpu", filename;
     bool profile = false;
     for (int i = 1; i < argc; ++i) {

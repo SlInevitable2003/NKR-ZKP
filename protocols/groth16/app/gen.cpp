@@ -1,6 +1,6 @@
 #include <cstdint>
 #include <cstdlib>
-#include "nkr/filesystem.hpp"
+#include <filesystem>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -315,8 +315,8 @@ int main(int argc, char *argv[]) try {
            out.a.num_cols, out.public_inputs, out.a.num_cols - 1 - out.public_inputs);
 
     const string data_dir = APP_DATA_DIR;
-    nkr::fs::create_directories(data_dir);
-    const auto paths = nkr::groth16::artifact_paths(nkr::fs::path(data_dir), stem);
+    std::filesystem::create_directories(data_dir);
+    const auto paths = nkr::groth16::artifact_paths(std::filesystem::path(data_dir), stem);
 
     {
         nkr::ProfileScope stage("groth16.gen.write_circuit");

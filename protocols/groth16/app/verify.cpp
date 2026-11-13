@@ -1,5 +1,5 @@
 #include <cstdlib>
-#include "nkr/filesystem.hpp"
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -25,8 +25,8 @@ static void usage(const char *program)
 
 int main(int argc, char **argv)
 {
-    nkr::fs::path directory = APP_DATA_DIR;
-    nkr::fs::path proof_input;
+    std::filesystem::path directory = APP_DATA_DIR;
+    std::filesystem::path proof_input;
     std::string filename;
     bool profile_enabled = false;
     for (int i = 1; i < argc; ++i) {
