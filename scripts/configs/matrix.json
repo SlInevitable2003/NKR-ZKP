@@ -72,18 +72,18 @@
     },
     "cuda": {
       "kind": "cuda",
-      "groth16_bin": "build/groth16-cuda/bin",
-      "groth16_data": "build/groth16-cuda/data",
-      "plonk_bin": "build/plonk-cuda/bin",
-      "plonk_data": "build/plonk-cuda/data",
+      "groth16_bin": "build/groth16/bin",
+      "groth16_data": "build/groth16/data",
+      "plonk_bin": "build/plonk/bin",
+      "plonk_data": "build/plonk/data",
       "stark_bin": "protocols/stark/winterfell/target/release/winterfell"
     },
     "hip": {
       "kind": "hip",
-      "groth16_bin": "build/groth16-hip/bin",
-      "groth16_data": "build/groth16-hip/data",
-      "plonk_bin": "build/plonk-hip/bin",
-      "plonk_data": "build/plonk-hip/data",
+      "groth16_bin": "build/groth16/bin",
+      "groth16_data": "build/groth16/data",
+      "plonk_bin": "build/plonk/bin",
+      "plonk_data": "build/plonk/data",
       "stark_bin": "protocols/stark/winterfell/target/release/winterfell"
     }
   },

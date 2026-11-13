@@ -56,6 +56,8 @@ def _select_cases(config: Config, args: argparse.Namespace) -> list[Case]:
         cases = [case for case in cases if case.k in wanted]
     if args.platform:
         wanted = set(parse_csv(args.platform))
+        if args.suite == "functional" and ("cuda" in wanted or "hip" in wanted):
+            wanted.add("cpu")  # functional also covers CPU and STARK on the same host
         cases = [case for case in cases if case.platform in wanted]
     if args.deployment:
         wanted = set(parse_csv(args.deployment))

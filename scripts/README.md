@@ -10,7 +10,9 @@
 ## 功能测试
 
 ```bash
-./scripts/functional.sh --run-id func-20261113
+./scripts/functional.sh gpu --run-id func-20261113   # GPU 机器
+./scripts/functional.sh dcu --run-id func-20261113   # DCU 机器
+./scripts/functional.sh cpu --run-id func-20261113   # 纯 CPU
 ```
 
 覆盖 `matmul`、`fibonacci`、`poseidon`、`sql`。Groth16/PLONK 在 CPU/GPU/DCU
@@ -19,7 +21,8 @@
 ## 单卡测试
 
 ```bash
-./scripts/single-card.sh --run-id p1-20261113
+./scripts/single-card.sh gpu --run-id p1-20261113
+./scripts/single-card.sh dcu --run-id p1-20261113
 ```
 
 Groth16，`k=20..26`，全部电路/密度，CPU 基准 + 单 GPU/DCU。
@@ -28,7 +31,8 @@ Groth16，`k=20..26`，全部电路/密度，CPU 基准 + 单 GPU/DCU。
 ## 多卡测试
 
 ```bash
-./scripts/multi-card.sh --run-id p2-20261113
+./scripts/multi-card.sh gpu --run-id p2-20261113
+./scripts/multi-card.sh dcu --run-id p2-20261113
 ```
 
 Groth16，GPU 4 卡 / DCU 8 卡，每张卡跑相同规模的独立证明。
@@ -38,10 +42,11 @@ Groth16，GPU 4 卡 / DCU 8 卡，每张卡跑相同规模的独立证明。
 多机分发由 Slurm 负责；每个节点运行：
 
 ```bash
-./scripts/distributed.sh \
-  --deployment cuda_3x4 \
-  --node "$SLURMD_NODENAME" \
-  --run-id p3-20261113
+# GPU 集群
+./scripts/distributed.sh gpu --node "$SLURMD_NODENAME" --run-id p3-20261113
+
+# DCU 集群
+./scripts/distributed.sh dcu --node "$SLURMD_NODENAME" --run-id p3-20261113
 ```
 
 每个节点只做本机的事：本机 Setup、本机所有卡跑 16 个 `2^26` 证明，
@@ -65,8 +70,10 @@ results/<run_id>/nodes/<node>/
 
 [`configs/matrix.json`](configs/matrix.json)
 
-如果测试环境的构建目录不是 `build/groth16[-cuda|-hip]` / `build/plonk[-cuda|-hip]`，
-修改其中的 `platforms.*.groth16_bin`、`groth16_data`、`plonk_bin`、`plonk_data`。
+默认路径与 Makefile 一致：`build/groth16/bin`、`build/groth16/data`、
+`build/plonk/bin`、`build/plonk/data`。一台机器只有 GPU 或 DCU 之一，构建对应后端后
+直接运行 `./scripts/... gpu|dcu`；如果实际构建目录不同，再修改
+`platforms.*.groth16_bin`、`groth16_data`、`plonk_bin`、`plonk_data`。
 
 ## 结果
 
