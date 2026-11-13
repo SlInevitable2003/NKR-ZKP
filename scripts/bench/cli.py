@@ -180,6 +180,36 @@ def cmd_inputs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _write_run_metadata(config: Config, run_dir: Path, cases: list[Case]) -> None:
+    write_json(
+        run_dir / "run.json",
+        {
+            "config_path": str(config.path) if config.path else None,
+            "config": config.data,
+            "cases": [case.case_id for case in cases],
+        },
+    )
+    env = environment()
+    try:
+        import subprocess
+
+        env["git_commit"] = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+        env["git_status"] = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "status", "--short"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+    except OSError:
+        pass
+    write_json(run_dir / "environment.json", env)
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     config = Config.load(args.config)
     config.validate()
