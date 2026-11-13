@@ -47,6 +47,7 @@ make groth16-hip HIP_ARCH=<gfx-arch>
 
 CUDA 默认位于 `/usr/local/cuda`, 可用 `CUDA_HOME` 覆盖; HIP 构建要求 CMake 找到 ROCm 工具链.
 需要 GCC 9+ 和 C++17（`std::filesystem`）。GCC 7/8 环境请先升级编译器。
+CUDA 11.7 的 nvcc 只接受 GCC <= 11；CUDA 构建请使用 GCC 11，CPU 构建可以使用更晚的 GCC。
 `gen` 和 `verify` 与后端无关; `setup`, `prove` 通过 `--backend cpu|cuda|hip` 选择实现.
 
 ### 1. 电路生成
