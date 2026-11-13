@@ -1,5 +1,5 @@
 #include <cstdlib>
-#include <filesystem>
+#include "nkr/filesystem.hpp"
 #include <iostream>
 #include <string>
 
@@ -27,8 +27,8 @@ static void usage(const char *program)
 
 int main(int argc, char **argv)
 {
-    std::filesystem::path directory = APP_DATA_DIR;
-    std::filesystem::path supplied_srs;
+    nkr::fs::path directory = APP_DATA_DIR;
+    nkr::fs::path supplied_srs;
     std::string backend_name = "cpu", filename;
     bool profile = false;
     for (int i = 1; i < argc; ++i) {
@@ -63,7 +63,7 @@ int main(int argc, char **argv)
 
         UniversalSrs srs;
         const bool generated_srs = supplied_srs.empty();
-        std::filesystem::path srs_path = supplied_srs;
+        nkr::fs::path srs_path = supplied_srs;
         if (!srs_path.empty() && srs_path.is_relative()) srs_path = directory / srs_path;
         {
             ProfileScope stage("plonk.setup.prepare_srs");
@@ -88,7 +88,7 @@ int main(int argc, char **argv)
             backend->setup(circuit, srs, proving_key, verification_key);
         }
 
-        std::filesystem::create_directories(directory);
+        nkr::fs::create_directories(directory);
         if (generated_srs) {
             ProfileScope stage("plonk.setup.write_srs");
             write_srs(srs_path, srs);

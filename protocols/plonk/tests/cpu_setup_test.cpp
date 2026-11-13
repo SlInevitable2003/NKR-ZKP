@@ -9,7 +9,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
+#include "nkr/filesystem.hpp"
 #include <stdexcept>
 #include <vector>
 
@@ -246,9 +246,9 @@ int main()
     assert(setup_rejects(*backend, invalid_permutation, srs));
 
     const auto suffix = std::chrono::steady_clock::now().time_since_epoch().count();
-    const std::filesystem::path directory = std::filesystem::temp_directory_path() /
+    const nkr::fs::path directory = nkr::fs::temp_directory_path() /
         ("nkr-plonk-io-test-" + std::to_string(suffix));
-    std::filesystem::create_directories(directory);
+    nkr::fs::create_directories(directory);
     const ArtifactPaths paths = artifact_paths(directory, "roundtrip.bin");
     write_circuit(paths.circuit, arithmetization.circuit);
     write_witness(paths.witness, arithmetization.witness);
@@ -296,6 +296,6 @@ int main()
         loaded_verification_key.commitments, verification_key.commitments);
     assert(loaded_verification_key.g2 == verification_key.g2);
     assert(loaded_verification_key.tau_g2 == verification_key.tau_g2);
-    std::filesystem::remove_all(directory);
+    nkr::fs::remove_all(directory);
     return 0;
 }

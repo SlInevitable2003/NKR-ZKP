@@ -4,8 +4,8 @@
 | --- | --- |
 | `functional.sh` | 功能测试: Groth16/PLONK/STARK 的 Gen/Setup/Prove/Verify |
 | `single-card.sh` | Groth16 单卡测试(CPU/GPU/DCU) |
-| `multi-card.sh` | Groth16 多卡测试(CPU/GPU/DCU) |
-| `distributed.sh` | Groth16 多机多卡测试(CPU/GPU/DCU) |
+| `multi-card.sh` | Groth16 多卡测试(GPU/DCU) |
+| `distributed.sh` | Groth16 多机多卡测试(GPU/DCU, Slurm) |
 
 ## 功能测试
 
@@ -13,7 +13,8 @@
 ./scripts/functional.sh --run-id func-20261113
 ```
 
-覆盖 `matmul`、`fibonacci`、`poseidon`、`sql`，Groth16/PLONK/zkSTARK 在 CPU/GPU/DCU 上执行
+覆盖 `matmul`、`fibonacci`、`poseidon`、`sql`。Groth16/PLONK 在 CPU/GPU/DCU
+上执行；STARK 目前只有 CPU 实现，`GPU-sim`/`DCU-sim` 是 CPU 线程标签。
 
 ## 单卡测试
 

@@ -7,7 +7,7 @@
 
 #include <cassert>
 #include <chrono>
-#include <filesystem>
+#include "nkr/filesystem.hpp"
 #include <string>
 
 using namespace nkr::plonk;
@@ -98,13 +98,13 @@ int main()
     assert(rejected);
 
     const auto suffix = std::chrono::steady_clock::now().time_since_epoch().count();
-    const std::filesystem::path directory = std::filesystem::temp_directory_path() /
+    const nkr::fs::path directory = nkr::fs::temp_directory_path() /
         ("nkr-plonk-proof-test-" + std::to_string(suffix));
-    std::filesystem::create_directories(directory);
-    const std::filesystem::path path = directory / "proof.bin";
+    nkr::fs::create_directories(directory);
+    const nkr::fs::path path = directory / "proof.bin";
     write_proof(path, proof);
     const Proof loaded = read_proof(path);
     assert(verify(verification_key, arithmetization.witness.public_input, loaded));
-    std::filesystem::remove_all(directory);
+    nkr::fs::remove_all(directory);
     return 0;
 }

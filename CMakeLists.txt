@@ -2,6 +2,15 @@ cmake_minimum_required(VERSION 3.21)
 
 project(NKR_ZKP LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_STANDARD 17)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9)
+    # std::experimental::filesystem still needs the separate runtime library.
+    link_libraries(stdc++fs)
+endif()
+
 set(NKR_ZKP_ACCELERATOR "NONE" CACHE STRING
     "Optional accelerator to build alongside CPU: NONE, CUDA, or HIP")
 set_property(CACHE NKR_ZKP_ACCELERATOR PROPERTY STRINGS NONE CUDA HIP)

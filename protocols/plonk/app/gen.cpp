@@ -1,6 +1,6 @@
 #include <cstdint>
 #include <cstdlib>
-#include <filesystem>
+#include "nkr/filesystem.hpp"
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -277,8 +277,8 @@ int main(int argc, char *argv[]) try {
     printf("* PLONK public inputs: %zu\n", out.circuit.public_inputs);
 
     const string data_dir = APP_DATA_DIR;
-    std::filesystem::create_directories(data_dir);
-    const auto paths = nkr::plonk::artifact_paths(std::filesystem::path(data_dir), stem);
+    nkr::fs::create_directories(data_dir);
+    const auto paths = nkr::plonk::artifact_paths(nkr::fs::path(data_dir), stem);
 
     {
         nkr::ProfileScope stage("plonk.gen.write_circuit");
