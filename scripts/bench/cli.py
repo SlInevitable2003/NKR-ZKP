@@ -106,6 +106,70 @@ def _required_commands(cases: list[Case], config: Config) -> list[Path]:
     return commands
 
 
+def _run_environment_problems(cases: list[Case], config: Config) -> list[str]:
+    problems: list[str] = []
+    for command in _required_commands(cases, config):
+        if not command.exists():
+            problems.append(f"missing binary: {command}")
+        elif not os.access(command, os.X_OK):
+            problems.append(f"not executable: {command}")
+
+    checked: set[tuple[str, str]] = set()
+    for case in cases:
+        if case.is_stark or case.param is None:
+            continue
+        key = (case.protocol, case.platform)
+        if key in checked:
+            continue
+        checked.add(key)
+        generator = config.bin_for(case.protocol, case.platform) / f"{case.protocol}-gen"
+        if not generator.exists():
+            continue
+        try:
+            import subprocess
+
+            probe = subprocess.run(
+                [str(generator), "--help"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            text = probe.stdout + probe.stderr
+            required_cases = ["matmul", "fibonacci", "poseidon", "sql-aggregate"]
+            missing = [name for name in required_cases if name not in text]
+            if "--density" not in text or missing:
+                problems.append(
+                    f"stale binary: {generator} does not advertise "
+                    f"all circuits/density (missing={missing}); rebuild it"
+                )
+        except (OSError, subprocess.SubprocessError) as exc:
+            problems.append(f"could not probe {generator}: {exc}")
+
+        for stage, flag in (("prove", "--output"), ("verify", "--proof")):
+            binary = config.bin_for(case.protocol, case.platform) / f"{case.protocol}-{stage}"
+            if not binary.exists():
+                continue
+            try:
+                import subprocess
+
+                probe = subprocess.run(
+                    [str(binary), "--help"],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    check=False,
+                )
+                text = probe.stdout + probe.stderr
+                if flag not in text:
+                    problems.append(
+                        f"stale binary: {binary} does not advertise {flag}; rebuild it"
+                    )
+            except (OSError, subprocess.SubprocessError) as exc:
+                problems.append(f"could not probe {binary}: {exc}")
+    return problems
+
+
 def cmd_preflight(args: argparse.Namespace) -> int:
     config = Config.load(args.config)
     config.validate()
@@ -231,6 +295,16 @@ def cmd_run(args: argparse.Namespace) -> int:
     if args.dry_run:
         print("dry-run: no process was started")
         return 0
+    environment_problems = _run_environment_problems(cases, config)
+    if environment_problems:
+        for problem in environment_problems:
+            print(f"error: {problem}", file=sys.stderr)
+        print(
+            "fix the build paths in scripts/configs/matrix.json or rebuild the binaries; "
+            "for a CPU-only run use `--platform cpu`.",
+            file=sys.stderr,
+        )
+        return 1
     runner = CaseRunner(
         config,
         run_dir,
@@ -294,6 +368,11 @@ def cmd_run_node(args: argparse.Namespace) -> int:
     cases = [case for case in cases if args.node in case.nodes]
     if not cases:
         print(f"no P3 cases for node {args.node} in {args.deployment}", file=sys.stderr)
+        return 1
+    environment_problems = _run_environment_problems(cases, config)
+    if environment_problems:
+        for problem in environment_problems:
+            print(f"error: {problem}", file=sys.stderr)
         return 1
     base_dir = args.run_dir or config.results_dir() / (args.run_id or now_run_id())
     node_dir = ensure_dir(base_dir / "nodes" / args.node)

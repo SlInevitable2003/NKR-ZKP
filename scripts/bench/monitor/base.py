@@ -39,20 +39,20 @@ class Sampler(threading.Thread):
         self.sample_fn = sample_fn
         self.samples: list[Sample] = []
         self.error: str | None = None
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
 
     def run(self) -> None:
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             started = time.time()
             try:
                 self.samples.extend(self.sample_fn())
             except Exception as exc:  # keep the benchmark alive
                 self.error = str(exc)
             elapsed = time.time() - started
-            self._stop.wait(max(0.0, self.interval_s - elapsed))
+            self._stop_event.wait(max(0.0, self.interval_s - elapsed))
 
     def stop(self) -> list[Sample]:
-        self._stop.set()
+        self._stop_event.set()
         self.join(timeout=5)
         return self.samples
 
